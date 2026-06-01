@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>治兵衛 QSCチェック表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #F5F3EE;
+  --surface: #FFFFFF;
+  --surface2: #EDEAE3;
+  --border: #D8D3C8;
+  --border2: #EAE6DE;
+  --text: #1C1A16;
+  --text2: #6B6558;
+  --text3: #A09890;
+  --accent: #2C5F2E;
+  --accent-light: #EAF1EA;
+  --amber: #92520A;
+  --amber-light: #FDF0DC;
+  --red: #8B2020;
+  --red-light: #FDEAEA;
+  --blue: #1A3F6F;
+  --blue-light: #E8EFF8;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* LAYOUT */
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+.top-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 16px; position: sticky; top: 0; z-index: 100; }
+.top-bar-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 10px; height: 56px; flex-wrap: wrap; }
+.logo { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.logo span { color: var(--accent); }
+.month-badge { font-family: 'DM Mono', monospace; font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; color: var(--text2); }
+.top-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.sync-indicator { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3); }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; }
+.sync-dot.synced { background: #3CAA5A; }
+.sync-dot.syncing { background: #F0A500; animation: pulse 1s infinite; }
+.sync-dot.error { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.main { flex: 1; padding: 0 16px 80px; }
+.main-inner { max-width: 900px; margin: 0 auto; padding-top: 16px; }
+
+/* NAV TABS */
+.nav-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 16px; }
+.nav-scroll::-webkit-scrollbar { display: none; }
+.nav-tabs { display: flex; gap: 4px; white-space: nowrap; padding-bottom: 2px; }
+.nav-tab { padding: 7px 14px; font-size: 13px; font-family: 'Noto Sans JP', sans-serif; border: 1px solid var(--border); border-radius: 20px; cursor: pointer; background: var(--surface); color: var(--text2); transition: all 0.15s; flex-shrink: 0; font-weight: 500; }
+.nav-tab:hover { background: var(--surface2); color: var(--text); }
+.nav-tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+.nav-tab.hist { border-style: dashed; }
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; font-size: 13px; font-family: 'Noto Sans JP', sans-serif; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; background: var(--surface); color: var(--text); font-weight: 500; transition: all 0.15s; white-space: nowrap; }
+.btn:hover { background: var(--surface2); }
+.btn-save { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-save:hover { background: #245026; }
+.btn-next { background: var(--surface); border-color: var(--text2); color: var(--text); }
+.btn-danger { background: var(--red-light); border-color: var(--red); color: var(--red); }
+.btn-danger:hover { background: #fbd7d7; }
+.btn-cancel { background: transparent; color: var(--text2); }
+
+/* CONFIRM BOX */
+.confirm-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; display: none; box-shadow: var(--shadow-md); }
+.confirm-box.open { display: block; }
+.confirm-box p { font-size: 14px; margin-bottom: 12px; line-height: 1.6; }
+.confirm-box strong { color: var(--red); }
+.confirm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* OVERVIEW */
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.ov-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all 0.15s; box-shadow: var(--shadow); }
+.ov-card:hover { border-color: var(--text2); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.ov-store { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+.ov-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin: 3px 0; }
+.ov-total { font-size: 18px; font-weight: 700; margin-top: 10px; }
+.pb-wrap { height: 4px; background: var(--border2); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.pb { height: 100%; border-radius: 2px; transition: width 0.4s; }
+
+.chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.chart-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+
+/* CHECK VIEW */
+.store-meta { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.store-meta-title { font-size: 16px; font-weight: 700; }
+.meta-input { font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-family: 'Noto Sans JP', sans-serif; }
+
+.score-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-bottom: 16px; }
+.score-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); }
+.sc-label { font-size: 10px; color: var(--text2); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+.sc-value { font-size: 18px; font-weight: 700; font-family: 'DM Mono', monospace; }
+.sc-total .sc-value { color: var(--blue); }
+
+.legend { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-size: 11.5px; color: var(--text2); display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 14px; }
+.leg-item { display: flex; align-items: center; gap: 4px; }
+.leg-dot { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+
+/* SECTIONS */
+.section { margin-bottom: 12px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.sec-header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; cursor: pointer; user-select: none; }
+.sec-header-title { font-size: 14px; font-weight: 700; flex: 1; }
+.sec-score-badge { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text2); background: rgba(255,255,255,0.6); padding: 2px 8px; border-radius: 10px; }
+.sec-chev { font-size: 16px; color: var(--text2); transition: transform 0.2s; }
+.sec-header.open .sec-chev { transform: rotate(180deg); }
+.sec-q { background: #DCE9F5; }
+.sec-s { background: #D8EBD3; }
+.sec-c { background: #F5E9D0; }
+.sec-m { background: #F0DDE8; }
+
+.items-wrap { background: var(--surface); border-top: 1px solid var(--border2); display: none; }
+.items-wrap.open { display: block; }
+
+.item-row { padding: 12px 14px; border-bottom: 1px solid var(--border2); }
+.item-row:last-child { border-bottom: none; }
+.item-top { display: flex; align-items: flex-start; gap: 10px; }
+.item-num { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); min-width: 18px; padding-top: 3px; flex-shrink: 0; }
+.item-body { flex: 1; }
+.item-text { font-size: 13px; line-height: 1.6; margin-bottom: 8px; }
+.score-btns { display: flex; gap: 4px; flex-shrink: 0; }
+.sb { width: 34px; height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text2); font-family: 'DM Mono', monospace; transition: all 0.1s; flex-shrink: 0; }
+.sb:hover { background: var(--surface2); }
+.sb.v0 { background: #FDDCDC; border-color: #E07070; color: #7A1A1A; }
+.sb.v1 { background: #FDE8C2; border-color: #D0900A; color: #7A4A00; }
+.sb.v2 { background: #FDF4C0; border-color: #C8A800; color: #6A5500; }
+.sb.v3 { background: #D4EDCC; border-color: #5B9E42; color: #2A5A18; }
+.sb.v4 { background: #C0E8D8; border-color: #2E9E74; color: #0A5A3A; }
+
+.item-comment { width: 100%; font-size: 12px; padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface2); color: var(--text); font-family: 'Noto Sans JP', sans-serif; resize: none; height: 52px; transition: border-color 0.15s, height 0.15s; margin-top: 4px; }
+.item-comment:focus { outline: none; border-color: var(--accent); background: var(--surface); height: 72px; }
+.item-comment::placeholder { color: var(--text3); }
+
+.sec-comment-wrap { padding: 12px 14px; background: var(--surface2); border-top: 1px solid var(--border2); }
+.sec-comment-wrap label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .3px; display: block; margin-bottom: 5px; }
+.sec-comment-wrap textarea { width: 100%; font-size: 12px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-family: 'Noto Sans JP', sans-serif; resize: vertical; height: 64px; }
+.sec-comment-wrap textarea:focus { outline: none; border-color: var(--accent); }
+
+/* HISTORY */
+.hist-list { display: flex; flex-direction: column; gap: 10px; }
+.hist-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.hist-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; cursor: pointer; }
+.hist-head:hover { background: var(--surface2); }
+.hist-month { font-size: 14px; font-weight: 700; }
+.hist-avg { font-size: 12px; }
+.hist-chev { font-size: 16px; color: var(--text3); transition: transform 0.2s; }
+.hist-chev.open { transform: rotate(180deg); }
+.hist-body { display: none; border-top: 1px solid var(--border2); }
+.hist-body.open { display: block; }
+.hist-store { display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; border-bottom: 1px solid var(--border2); font-size: 13px; flex-wrap: wrap; gap: 6px; }
+.hist-store:last-child { border-bottom: none; }
+.hist-sname { font-weight: 600; min-width: 80px; }
+.hist-mini { display: flex; gap: 10px; flex-wrap: wrap; }
+.hist-mini span { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text2); }
+.hist-ptotal { font-size: 14px; font-weight: 700; font-family: 'DM Mono', monospace; }
+.empty-hist { text-align: center; padding: 60px 20px; color: var(--text3); }
+.empty-hist .big { font-size: 36px; margin-bottom: 10px; }
+
+/* BADGE */
+.badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+.bg-green { background: #D4EDCC; color: #2A5A18; }
+.bg-amber { background: #FDE8C2; color: #7A4A00; }
+.bg-red { background: #FDDCDC; color: #7A1A1A; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px); background: var(--text); color: #fff; font-size: 13px; font-weight: 500; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; z-index: 999; box-shadow: var(--shadow-md); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+  .top-bar-inner { height: auto; padding: 10px 0; gap: 8px; }
+  .score-cards { grid-template-columns: repeat(3, 1fr); }
+  .ov-grid { grid-template-columns: repeat(2, 1fr); }
+  .sb { width: 30px; height: 30px; font-size: 12px; }
+  .item-text { font-size: 12px; }
+  .item-row { padding: 10px 12px; }
+  .btn { padding: 6px 11px; font-size: 12px; }
+}
+@media (max-width: 380px) {
+  .score-cards { grid-template-columns: repeat(2, 1fr); }
+  .sb { width: 28px; height: 28px; font-size: 11px; }
+}
+
+/* LOADING OVERLAY */
+.loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 14px; transition: opacity 0.3s; }
+.loading-overlay.hide { opacity: 0; pointer-events: none; }
+.loading-logo { font-size: 22px; font-weight: 700; }
+.loading-logo span { color: var(--accent); }
+.loading-spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-logo">治兵衛 <span>QSC</span></div>
+  <div class="loading-spinner"></div>
+  <div style="font-size:13px;color:var(--text3);">データを読み込み中...</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="app-shell">
+  <div class="top-bar">
+    <div class="top-bar-inner">
+      <div class="logo">治兵衛 <span>QSC</span></div>
+      <div class="month-badge" id="monthBadge">令和8年5月</div>
+      <div class="top-actions">
+        <div class="sync-indicator">
+          <div class="sync-dot" id="syncDot"></div>
+          <span id="syncLabel">接続中...</span>
+        </div>
+        <button class="btn btn-save" onclick="saveCurrentMonth()">💾 保存</button>
+        <button class="btn btn-next" onclick="showConfirm()">📅 次月</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="main-inner">
+
+      <div class="confirm-box" id="confirmBox">
+        <p>現在のデータを保存してから、<strong>全店舗のスコア・コメントをリセット</strong>して次月分を作成します。よろしいですか？</p>
+        <div class="confirm-actions">
+          <button class="btn btn-danger" onclick="doNextMonth()">✅ 保存してリセット</button>
+          <button class="btn btn-cancel" onclick="hideConfirm()">キャンセル</button>
+        </div>
+      </div>
+
+      <div class="nav-scroll">
+        <div class="nav-tabs" id="navTabs">
+          <button class="nav-tab active" onclick="showView('overview')">全店集計</button>
+          <button class="nav-tab" onclick="showView('check','丸の内')">丸の内</button>
+          <button class="nav-tab" onclick="showView('check','酒場')">酒場</button>
+          <button class="nav-tab" onclick="showView('check','金山小町')">金山小町</button>
+          <button class="nav-tab" onclick="showView('check','大金')">大金</button>
+          <button class="nav-tab" onclick="showView('check','名駅')">名駅</button>
+          <button class="nav-tab" onclick="showView('check','炉端')">炉端</button>
+          <button class="nav-tab hist" onclick="showView('history')">📋 履歴</button>
+        </div>
+      </div>
+
+      <div id="viewOverview"></div>
+      <div id="viewCheck" style="display:none;"></div>
+      <div id="viewHistory" style="display:none;"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// ============================================================
+// 🔧 ここにあなたのFirebase設定を貼り付けてください
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDLR3zHlhxe7dvYflXAttPF7ieqGXc_X3U",
+  authDomain: "jiheiqsc.firebaseapp.com",
+  databaseURL: "https://jiheiqsc-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "jiheiqsc",
+  storageBucket: "jiheiqsc.firebasestorage.app",
+  messagingSenderId: "835464524805",
+  appId: "1:835464524805:web:d61f229a68bcf10368586c",
+  measurementId: "G-BB5GT4T30R"};
+// ============================================================
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// ──────────────────── データ定義 ────────────────────
+const DEFS = {
+  '丸の内': {
+    q:[{t:'生ビールは適切な品質で提供されている（グラスの温度、泡の量）'},{t:'料理の盛り付けが分量通りで美味しそうか'},{t:'仕込み量、発注量が適正か'},{t:'焼鳥の焼き加減がどうか'},{t:'ドリンクの添え物（レモン等）、マドラー、氷の量は適正で美味しそうか'}],
+    s:[{t:'全従業員がお客様の目を見て、笑顔で元気よく「いらっしゃいませ、ありがとうございます」が言えている'},{t:'すみやかに案内され、笑顔で丁寧な応対が実践されている'},{t:'従業員は身なりがきちんとしており、清潔で健康的である。清潔なユニホームを着用している。'},{t:'テーブルリセットがすみやかに実施されている（放置されていない。拭き洩らし、カスターセット、メニュー）'},{t:'従業員同士の会話はお客様に配慮されている（大声、私語、ネガティブでない）'},{t:'著しい遅れがなく、商品の提供がされている（ドリンク5分以内、料理目安15分以内）'},{t:'新規、お1人様、クイック、〆を優先的に提供できているか'},{t:'手の空いている人は全員、最低でも一人は外まで出て、見えなくなるまでお見送りをしているか'}],
+    c:[{t:'バックヤードは整理整頓されている'},{t:'店舗外観は清潔に管理されている（ガラス、外の傘、雑草、ゴミ等）'},{t:'床が清潔に管理されている（箸袋等の大きいゴミ、濡れていないか）'},{t:'レジ回りが整理されている、ホコリなどがない'},{t:'掲示物は適正に掲出され清潔である（色褪せ、剥がれ、セロテープ跡）'},{t:'ホールの天井、エアコンフィルター、通気口、照明は清潔である（ホコリ）'},{t:'最低でも2時間に1度、トイレチェックに行っており清潔に維持されている'},{t:'キッチン、ドリンカー、洗い場周辺は清潔に維持されている'},{t:'カスターセットは清潔で補充されており、メニュー・メニュー立てが清潔か'},{t:'サービス台、お客様の前の棚がきれいか'}],
+    m:[{t:'手洗いは適切に実施されている（ドリンク作成、調理前）'},{t:'食品の賞味期限が守られている'},{t:'各店の目標の共有・実行ができているか'},{t:'直近現金差に問題はないか（レジ金、両替金）'}],
+    mq:20,ms:32,mc:40,mm:8
+  },
+  '酒場': {
+    q:[{t:'生ビールは適切な品質で提供されている（グラスの温度、泡の量）'},{t:'料理の盛り付けが分量通りで美味しそうか'},{t:'仕込み量、発注量が適正か'},{t:'ドリンクの添え物（レモン等）、マドラー、氷の量は適正で美味しそうか'}],
+    s:[{t:'全従業員がお客様の目を見て、笑顔で元気よく「いらっしゃいませ、ありがとうございます」が言えている'},{t:'すみやかに案内され、笑顔で丁寧な応対が実践されている'},{t:'従業員は身なりがきちんとしており、清潔で健康的である。清潔なユニホームを着用している。'},{t:'テーブルリセットがすみやかに実施されている（放置されていない。拭き洩らし、カスターセット、メニュー）'},{t:'従業員同士の会話はお客様に配慮されている（大声、私語、ネガティブでない）'},{t:'著しい遅れがなく、商品の提供がされている（ドリンク5分以内、料理目安15分以内）'},{t:'新規、お1人様、クイック、〆を優先的に提供できているか'},{t:'手の空いている人は全員、最低でも一人は外まで出て、見えなくなるまでお見送りをしているか'}],
+    c:[{t:'バックヤードは整理整頓されている'},{t:'店舗外観は清潔に管理されている（ガラス、外の傘、雑草、ゴミ等）'},{t:'床が清潔に管理されている（箸袋等の大きいゴミ、濡れていないか）'},{t:'レジ回りが整理されている、ホコリなどがない'},{t:'掲示物は適正に掲出され清潔である（色褪せ、剥がれ、セロテープ跡）'},{t:'ホールの天井、エアコンフィルター、通気口、照明は清潔である（ホコリ）'},{t:'最低でも2時間に1度、トイレチェックに行っており清潔に維持されている'},{t:'キッチン、ドリンカー、洗い場周辺は清潔に維持されている'},{t:'カスターセットは清潔で補充されており、メニュー・メニュー立てが清潔か'},{t:'サービス台、お客様の前の棚がきれいか'}],
+    m:[{t:'手洗いは適切に実施されている（ドリンク作成、調理前）'},{t:'食品の賞味期限が守られている'},{t:'各店の目標の共有・実行ができているか'},{t:'直近現金差に問題はないか（レジ金、両替金）'}],
+    mq:16,ms:32,mc:40,mm:12
+  },
+  '金山小町': {
+    q:[{t:'生ビールは適切な品質で提供されている'},{t:'料理の盛り付けが分量通りで美味しそうか'},{t:'仕込み量、発注量が適正か'},{t:'焼鳥の焼き加減がどうか'},{t:'ドリンクの添え物（レモン等）、マドラー、氷の量は適正で美味しそうか'}],
+    s:[{t:'全従業員がお客様の目を見て、笑顔で元気よく「いらっしゃいませ、ありがとうございます」が言えている'},{t:'すみやかに案内され、笑顔で丁寧な応対が実践されている'},{t:'従業員は身なりがきちんとしており、清潔で健康的である'},{t:'テーブルリセットがすみやかに実施されている'},{t:'従業員同士の会話はお客様に配慮されている'},{t:'著しい遅れがなく、商品の提供がされている'},{t:'新規、お1人様、クイック、〆を優先的に提供できているか'},{t:'手の空いている人は全員、最低でも一人は外まで出て見送りをしているか'}],
+    c:[{t:'バックヤードは整理整頓されている'},{t:'店舗外観は清潔に管理されている'},{t:'床が清潔に管理されている'},{t:'レジ回りが整理されている'},{t:'掲示物は適正に掲出され清潔である'},{t:'ホールの天井、エアコンフィルター等は清潔である'},{t:'トイレチェックに行っており清潔に維持されている'},{t:'キッチン、ドリンカー、洗い場周辺は清潔に維持されている'},{t:'カスターセットは清潔で補充されており、メニューが清潔か'},{t:'サービス台、お客様の前の棚がきれいか'}],
+    m:[{t:'手洗いは適切に実施されている'},{t:'食品の賞味期限が守られている'},{t:'各店の目標の共有・実行ができているか'},{t:'直近現金差に問題はないか'}],
+    mq:20,ms:32,mc:40,mm:8
+  },
+  '大金': {
+    q:[{t:'生ビールは適切な品質で提供されている'},{t:'料理の盛り付けが分量通りで美味しそうか'},{t:'仕込み量、発注量が適正か'},{t:'焼鳥の焼き加減がどうか'},{t:'ドリンクの添え物（レモン等）、マドラー、氷の量は適正で美味しそうか'}],
+    s:[{t:'全従業員がお客様の目を見て、笑顔で元気よく「いらっしゃいませ、ありがとうございます」が言えている'},{t:'すみやかに案内され、笑顔で丁寧な応対が実践されている'},{t:'従業員は身なりがきちんとしており、清潔で健康的である'},{t:'テーブルリセットがすみやかに実施されている'},{t:'従業員同士の会話はお客様に配慮されている'},{t:'著しい遅れがなく、商品の提供がされている'},{t:'新規、お1人様、クイック、〆を優先的に提供できているか'},{t:'手の空いている人は全員、最低でも一人は外まで出て見送りをしているか'}],
+    c:[{t:'バックヤードは整理整頓されている'},{t:'店舗外観は清潔に管理されている'},{t:'床が清潔に管理されている'},{t:'レジ回りが整理されている'},{t:'掲示物は適正に掲出され清潔である'},{t:'ホールの天井、エアコンフィルター等は清潔である'},{t:'トイレチェックに行っており清潔に維持されている'},{t:'キッチン、ドリンカー、洗い場周辺は清潔に維持されている'},{t:'カスターセットは清潔で補充されており、メニューが清潔か'},{t:'サービス台、お客様の前の棚がきれいか'}],
+    m:[{t:'手洗いは適切に実施されている'},{t:'食品の賞味期限が守られている'},{t:'各店の目標の共有・実行ができているか'},{t:'直近現金差に問題はないか'}],
+    mq:20,ms:32,mc:40,mm:8
+  },
+  '名駅': {
+    q:[{t:'生ビールは適切な品質で提供されている'},{t:'料理の盛り付けが分量通りで美味しそうか'},{t:'仕込み量、発注量が適正か'},{t:'焼鳥の焼き加減がどうか'},{t:'ドリンクの添え物（レモン等）、マドラー、氷の量は適正で美味しそうか'}],
+    s:[{t:'全従業員がお客様の目を見て、笑顔で元気よく「いらっしゃいませ、ありがとうございます」が言えている'},{t:'すみやかに案内され、笑顔で丁寧な応対が実践されている'},{t:'従業員は身なりがきちんとしており、清潔で健康的である'},{t:'テーブルリセットがすみやかに実施されている'},{t:'従業員同士の会話はお客様に配慮されている'},{t:'著しい遅れがなく、商品の提供がされている'},{t:'新規、お1人様、クイック、〆を優先的に提供できているか'},{t:'手の空いている人は全員、最低でも一人は外まで出て見送りをしているか'}],
+    c:[{t:'バックヤードは整理整頓されている'},{t:'店舗外観は清潔に管理されている'},{t:'床が清潔に管理されている'},{t:'レジ回りが整理されている'},{t:'掲示物は適正に掲出され清潔である'},{t:'ホールの天井、エアコンフィルター等は清潔である'},{t:'トイレチェックに行っており清潔に維持されている'},{t:'キッチン、ドリンカー、洗い場周辺は清潔に維持されている'},{t:'カスターセットは清潔で補充されており、メニューが清潔か'},{t:'サービス台、お客様の前の棚がきれいか'}],
+    m:[{t:'手洗いは適切に実施されている'},{t:'食品の賞味期限が守られている'},{t:'各店の目標の共有・実行ができているか'},{t:'直近現金差に問題はないか'}],
+    mq:20,ms:32,mc:40,mm:8
+  },
+  '炉端': {
+    q:[{t:'生ビールは適切な品質で提供されている'},{t:'料理の盛り付けが分量通りで美味しそうか'},{t:'仕込み量、発注量が適正か'},{t:'焼鳥の焼き加減がどうか'},{t:'ドリンクの添え物（レモン等）、マドラー、氷の量は適正で美味しそうか'}],
+    s:[{t:'全従業員がお客様の目を見て、笑顔で元気よく「いらっしゃいませ、ありがとうございます」が言えている'},{t:'すみやかに案内され、笑顔で丁寧な応対が実践されている'},{t:'従業員は身なりがきちんとしており、清潔で健康的である'},{t:'テーブルリセットがすみやかに実施されている'},{t:'従業員同士の会話はお客様に配慮されている'},{t:'著しい遅れがなく、商品の提供がされている'},{t:'新規、お1人様、クイック、〆を優先的に提供できているか'},{t:'手の空いている人は全員、最低でも一人は外まで出て見送りをしているか'}],
+    c:[{t:'バックヤードは整理整頓されている'},{t:'店舗外観は清潔に管理されている'},{t:'床が清潔に管理されている'},{t:'レジ回りが整理されている'},{t:'掲示物は適正に掲出され清潔である'},{t:'ホールの天井、エアコンフィルター等は清潔である'},{t:'トイレチェックに行っており清潔に維持されている'},{t:'キッチン、ドリンカー、洗い場周辺は清潔に維持されている'},{t:'カスターセットは清潔で補充されており、メニューが清潔か'},{t:'サービス台、お客様の前の棚がきれいか'}],
+    m:[{t:'手洗いは適切に実施されている'},{t:'食品の賞味期限が守られている'},{t:'各店の目標の共有・実行ができているか'},{t:'直近現金差に問題はないか'}],
+    mq:20,ms:32,mc:40,mm:8
+  }
+};
+const STORES = Object.keys(DEFS);
+
+// ──────────────────── 状態 ────────────────────
+let curYear = 8, curMonth = 5;
+let curStore = null;
+let curView = 'overview';
+let appData = { current: {}, history: [] };
+let ovChart = null;
+let saveTimer = null;
+let isListening = false;
+
+function monthKey(y,m){ return `R${y}_${String(m).padStart(2,'0')}`; }
+function monthLabel(y,m){ return `令和${y}年${m}月`; }
+function pct(v,max){ return max>0?Math.round(v/max*100):0; }
+function scoreColor(p){ return p>=80?'#2C5F2E':p>=60?'#92520A':'#8B2020'; }
+function badgeClass(p){ return p>=80?'bg-green':p>=60?'bg-amber':'bg-red'; }
+
+function emptyStore(name){
+  const d=DEFS[name];
+  return {
+    checker:'', date:'', storeComment:'', hqComment:'',
+    q:d.q.map(()=>({score:0,comment:''})),
+    s:d.s.map(()=>({score:0,comment:''})),
+    c:d.c.map(()=>({score:0,comment:''})),
+    m:d.m.map(()=>({score:0,comment:''}))
+  };
+}
+
+function ensureCurrentData(){
+  if(!appData.current) appData.current={};
+  STORES.forEach(n=>{ if(!appData.current[n]) appData.current[n]=emptyStore(n); });
+}
+
+function calcTotals(name, storeData){
+  const d=DEFS[name];
+  const sc=storeData||appData.current[name]||emptyStore(name);
+  const q=(sc.q||[]).reduce((a,i)=>a+(i.score||0),0);
+  const s=(sc.s||[]).reduce((a,i)=>a+(i.score||0),0);
+  const c=(sc.c||[]).reduce((a,i)=>a+(i.score||0),0);
+  const m=(sc.m||[]).reduce((a,i)=>a+(i.score||0),0);
+  return {q,s,c,m,mq:d.mq,ms:d.ms,mc:d.mc,mm:d.mm,total:q+s+c+m,max:d.mq+d.ms+d.mc+d.mm};
+}
+
+// ──────────────────── Firebase ────────────────────
+function setSyncState(state){
+  const dot=document.getElementById('syncDot');
+  const lbl=document.getElementById('syncLabel');
+  dot.className='sync-dot '+state;
+  lbl.textContent=state==='synced'?'同期済み':state==='syncing'?'同期中...':'接続エラー';
+}
+
+function dbPath(){ return `qsc/${monthKey(curYear,curMonth)}`; }
+
+function startListening(){
+  if(isListening) return;
+  isListening=true;
+  setSyncState('syncing');
+  const r=ref(db, dbPath());
+  onValue(r, snap=>{
+    setSyncState('synced');
+    const val=snap.val();
+    if(val){
+      appData.current=val.stores||{};
+      if(val.year) curYear=val.year;
+      if(val.month) curMonth=val.month;
+    }
+    ensureCurrentData();
+    document.getElementById('monthBadge').textContent=monthLabel(curYear,curMonth);
+    document.getElementById('loadingOverlay').classList.add('hide');
+    refreshCurrentView();
+  }, err=>{
+    setSyncState('error');
+    document.getElementById('loadingOverlay').classList.add('hide');
+    showToast('接続エラー。Firebaseの設定を確認してください。');
+  });
+}
+
+function pushData(){
+  setSyncState('syncing');
+  set(ref(db, dbPath()), {
+    year: curYear, month: curMonth,
+    stores: appData.current
+  }).then(()=>setSyncState('synced')).catch(()=>setSyncState('error'));
+}
+
+function schedulePush(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(pushData, 800);
+}
+
+async function saveCurrentMonth(){
+  const key=monthKey(curYear,curMonth);
+  const snap={key,year:curYear,month:curMonth,label:monthLabel(curYear,curMonth),stores:JSON.parse(JSON.stringify(appData.current))};
+  const histRef=ref(db,`qsc_history/${key}`);
+  setSyncState('syncing');
+  await set(histRef,snap);
+  setSyncState('synced');
+  showToast(`${snap.label}を保存しました`);
+}
+
+function showConfirm(){ document.getElementById('confirmBox').classList.add('open'); }
+function hideConfirm(){ document.getElementById('confirmBox').classList.remove('open'); }
+
+async function doNextMonth(){
+  await saveCurrentMonth();
+  curMonth++;
+  if(curMonth>12){curMonth=1;curYear++;}
+  STORES.forEach(n=>{ appData.current[n]=emptyStore(n); });
+  isListening=false;
+  document.getElementById('monthBadge').textContent=monthLabel(curYear,curMonth);
+  hideConfirm();
+  startListening();
+  pushData();
+  showView('overview');
+  showToast(`${monthLabel(curYear,curMonth)}分を作成しました`);
+}
+
+// ──────────────────── 表示切替 ────────────────────
+function showView(view, store){
+  curView=view; curStore=store||null;
+  ['viewOverview','viewCheck','viewHistory'].forEach(id=>document.getElementById(id).style.display='none');
+  const id='view'+view.charAt(0).toUpperCase()+view.slice(1);
+  document.getElementById(id).style.display='';
+  const keys=['overview',...STORES.map(n=>`check-${n}`),'history'];
+  document.querySelectorAll('.nav-tab').forEach((t,i)=>{
+    const k=view==='check'?`check-${store}`:view;
+    t.classList.toggle('active',keys[i]===k);
+  });
+  if(view==='overview') renderOverview();
+  if(view==='check') renderCheck(store);
+  if(view==='history') renderHistory();
+}
+
+function refreshCurrentView(){
+  if(curView==='overview') renderOverview();
+  if(curView==='check'&&curStore) renderCheck(curStore);
+  if(curView==='history') renderHistory();
+}
+
+// ──────────────────── 全店集計 ────────────────────
+function renderOverview(){
+  const el=document.getElementById('viewOverview');
+  let html='<div class="ov-grid">';
+  STORES.forEach(n=>{
+    const t=calcTotals(n); const tp=pct(t.total,t.max); const col=scoreColor(tp);
+    html+=`<div class="ov-card" onclick="showView('check','${n}')"><div class="ov-store">${n}店</div><div class="ov-row"><span>Q</span><span>${t.q}/${t.mq}</span></div><div class="ov-row"><span>S</span><span>${t.s}/${t.ms}</span></div><div class="ov-row"><span>C</span><span>${t.c}/${t.mc}</span></div><div class="ov-row"><span>管理</span><span>${t.m}/${t.mm}</span></div><div class="ov-total" style="color:${col}">${t.total}<span style="font-size:12px;font-weight:400;color:var(--text2)">/${t.max}点 (${tp}%)</span></div><div class="pb-wrap"><div class="pb" style="background:${col};width:${tp}%"></div></div></div>`;
+  });
+  html+='</div><div class="chart-card"><div class="chart-title">全店達成度</div><div style="position:relative;height:200px"><canvas id="ovChart"></canvas></div></div>';
+  el.innerHTML=html;
+  if(ovChart)ovChart.destroy();
+  const data=STORES.map(n=>{const t=calcTotals(n);return pct(t.total,t.max);});
+  ovChart=new Chart(document.getElementById('ovChart').getContext('2d'),{type:'bar',data:{labels:STORES.map(n=>n+'店'),datasets:[{data,backgroundColor:data.map(v=>v>=80?'#3CAA5A':v>=60?'#E09020':'#D04040'),borderWidth:0,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},x:{ticks:{font:{size:11,family:"'Noto Sans JP'"}},grid:{display:false}}}}});
+}
+
+// ──────────────────── 店舗チェック ────────────────────
+function renderCheck(name){
+  ensureCurrentData();
+  const sc=appData.current[name];
+  const d=DEFS[name];
+  const t=calcTotals(name);
+  let html=`<div class="store-meta"><span class="store-meta-title">${name}店</span><input class="meta-input" type="text" placeholder="実施者名" value="${sc.checker||''}" style="width:110px" oninput="setMeta('${name}','checker',this.value)"><input class="meta-input" type="date" value="${sc.date||''}" style="width:140px" oninput="setMeta('${name}','date',this.value)"></div>`;
+  html+=`<div class="legend"><span class="leg-item"><span class="leg-dot" style="background:#C0E8D8;color:#0A5A3A">4</span>どの時間も完璧</span><span class="leg-item"><span class="leg-dot" style="background:#D4EDCC;color:#2A5A18">3</span>概ねできている</span><span class="leg-item"><span class="leg-dot" style="background:#FDF4C0;color:#6A5500">2</span>ある程度</span><span class="leg-item"><span class="leg-dot" style="background:#FDE8C2;color:#7A4A00">1</span>できていないことが多い</span><span class="leg-item"><span class="leg-dot" style="background:#FDDCDC;color:#7A1A1A">0</span>まったくできていない</span></div>`;
+  html+=`<div class="score-cards"><div class="score-card"><div class="sc-label">Q クオリティ</div><div class="sc-value">${t.q}/${t.mq}</div><div class="pb-wrap"><div class="pb" style="background:#1A3F6F;width:${pct(t.q,t.mq)}%"></div></div></div><div class="score-card"><div class="sc-label">S サービス</div><div class="sc-value">${t.s}/${t.ms}</div><div class="pb-wrap"><div class="pb" style="background:#2C5F2E;width:${pct(t.s,t.ms)}%"></div></div></div><div class="score-card"><div class="sc-label">C クレンリネス</div><div class="sc-value">${t.c}/${t.mc}</div><div class="pb-wrap"><div class="pb" style="background:#92520A;width:${pct(t.c,t.mc)}%"></div></div></div><div class="score-card"><div class="sc-label">管理</div><div class="sc-value">${t.m}/${t.mm}</div><div class="pb-wrap"><div class="pb" style="background:#6B3070;width:${pct(t.m,t.mm)}%"></div></div></div><div class="score-card sc-total"><div class="sc-label">合計</div><div class="sc-value">${t.total}点</div><div class="pb-wrap"><div class="pb" style="background:#1A3F6F;width:${pct(t.total,t.max)}%"></div></div></div></div>`;
+
+  const secs=[{k:'q',lbl:'Q クオリティ',cls:'sec-q',items:d.q,sc:sc.q,mx:d.mq},{k:'s',lbl:'S サービス',cls:'sec-s',items:d.s,sc:sc.s,mx:d.ms},{k:'c',lbl:'C クレンリネス',cls:'sec-c',items:d.c,sc:sc.c,mx:d.mc},{k:'m',lbl:'管理',cls:'sec-m',items:d.m,sc:sc.m,mx:d.mm}];
+  secs.forEach(sec=>{
+    const tot=(sec.sc||[]).reduce((a,i)=>a+(i.score||0),0);
+    html+=`<div class="section"><div class="sec-header open ${sec.cls}" onclick="toggleSec(this)"><span class="sec-header-title">${sec.lbl}</span><span class="sec-score-badge">${tot} / ${sec.mx}</span><span class="sec-chev">▾</span></div><div class="items-wrap open">`;
+    (sec.items||[]).forEach((item,idx)=>{
+      const s=(sec.sc&&sec.sc[idx])||{score:0,comment:''};
+      const cm=s.comment||'';
+      html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea></div><div class="score-btns">${[0,1,2,3,4].map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
+    });
+    html+='</div></div>';
+  });
+
+  html+=`<div style="margin-top:8px"><div class="section"><div class="sec-header open" style="background:var(--surface2)" onclick="toggleSec(this)"><span class="sec-header-title">📝 全体コメント・本部メモ</span><span class="sec-chev">▾</span></div><div class="items-wrap open"><div class="sec-comment-wrap"><label>店舗コメント／改善ポイント</label><textarea oninput="setMeta('${name}','storeComment',this.value)">${sc.storeComment||''}</textarea></div><div class="sec-comment-wrap"><label>本部コメント</label><textarea oninput="setMeta('${name}','hqComment',this.value)">${sc.hqComment||''}</textarea></div></div></div></div>`;
+  document.getElementById('viewCheck').innerHTML=html;
+}
+
+function toggleSec(hdr){
+  hdr.classList.toggle('open');
+  hdr.nextElementSibling.classList.toggle('open');
+}
+
+function setScore(name,key,idx,val){
+  ensureCurrentData();
+  if(!appData.current[name][key][idx]) appData.current[name][key][idx]={score:0,comment:''};
+  appData.current[name][key][idx].score=val;
+  schedulePush();
+  // update buttons
+  const rows=document.querySelectorAll(`.item-row`);
+  let itemIdx=0;
+  const d=DEFS[name]; const secKeys=['q','s','c','m'];
+  for(const sk of secKeys){
+    for(let i=0;i<d[sk].length;i++){
+      if(sk===key&&i===idx){
+        const btns=rows[itemIdx].querySelectorAll('.sb');
+        btns.forEach((b,vi)=>{ b.className='sb'+(val===vi?' v'+vi:''); });
+        break;
+      }
+      itemIdx++;
+    }
+    if(sk===key) break;
+  }
+  // update score card headers
+  const t=calcTotals(name);
+  const cards=document.querySelectorAll('.score-card .sc-value');
+  if(cards[0]) cards[0].textContent=t.q+'/'+t.mq;
+  if(cards[1]) cards[1].textContent=t.s+'/'+t.ms;
+  if(cards[2]) cards[2].textContent=t.c+'/'+t.mc;
+  if(cards[3]) cards[3].textContent=t.m+'/'+t.mm;
+  if(cards[4]) cards[4].textContent=t.total+'点';
+  const pbs=document.querySelectorAll('.score-card .pb');
+  if(pbs[0]) pbs[0].style.width=pct(t.q,t.mq)+'%';
+  if(pbs[1]) pbs[1].style.width=pct(t.s,t.ms)+'%';
+  if(pbs[2]) pbs[2].style.width=pct(t.c,t.mc)+'%';
+  if(pbs[3]) pbs[3].style.width=pct(t.m,t.mm)+'%';
+  if(pbs[4]) pbs[4].style.width=pct(t.total,t.max)+'%';
+  // update sec badge
+  const secIdx=secKeys.indexOf(key);
+  const badges=document.querySelectorAll('.sec-score-badge');
+  const secMx=[t.mq,t.ms,t.mc,t.mm];
+  const secVals=[t.q,t.s,t.c,t.m];
+  if(badges[secIdx]) badges[secIdx].textContent=`${secVals[secIdx]} / ${secMx[secIdx]}`;
+}
+
+function setComment(name,key,idx,val){
+  ensureCurrentData();
+  if(!appData.current[name][key][idx]) appData.current[name][key][idx]={score:0,comment:''};
+  appData.current[name][key][idx].comment=val;
+  schedulePush();
+}
+
+function setMeta(name,field,val){
+  ensureCurrentData();
+  appData.current[name][field]=val;
+  schedulePush();
+}
+
+// ──────────────────── 履歴 ────────────────────
+function renderHistory(){
+  const el=document.getElementById('viewHistory');
+  const histRef=ref(db,'qsc_history');
+  el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">読み込み中...</div>';
+  get(histRef).then(snap=>{
+    const val=snap.val();
+    if(!val){ el.innerHTML='<div class="empty-hist"><div class="big">📋</div>保存済みの月次データはまだありません。<br><br>「💾 保存」または「📅 次月」で自動保存されます。</div>'; return; }
+    const entries=Object.values(val).sort((a,b)=>b.key.localeCompare(a.key));
+    let html='<div class="hist-list">';
+    entries.forEach((snap,si)=>{
+      const totals=STORES.map(n=>({name:n,t:calcTotals(n,snap.stores&&snap.stores[n])}));
+      const avgP=Math.round(totals.reduce((a,{t})=>a+pct(t.total,t.max),0)/totals.length);
+      html+=`<div class="hist-card"><div class="hist-head" onclick="toggleHist(${si})"><div style="display:flex;align-items:center;gap:10px"><span class="hist-month">${snap.label}</span><span class="badge ${badgeClass(avgP)}">全店平均 ${avgP}%</span></div><span class="hist-chev" id="hc${si}">▾</span></div><div class="hist-body" id="hb${si}">`;
+      totals.forEach(({name,t})=>{
+        const tp=pct(t.total,t.max);
+        html+=`<div class="hist-store"><span class="hist-sname">${name}店</span><div class="hist-mini"><span>Q:${t.q}/${t.mq}</span><span>S:${t.s}/${t.ms}</span><span>C:${t.c}/${t.mc}</span><span>管:${t.m}/${t.mm}</span></div><span class="hist-ptotal" style="color:${scoreColor(tp)}">${t.total}点 <span style="font-size:11px;color:var(--text2)">(${tp}%)</span></span></div>`;
+      });
+      html+='</div></div>';
+    });
+    html+='</div>';
+    if(entries.length>=2){
+      html+=`<div class="chart-card" style="margin-top:12px"><div class="chart-title">月別推移（全店平均達成度）</div><div style="position:relative;height:200px"><canvas id="trendChart"></canvas></div></div>`;
+    }
+    el.innerHTML=html;
+    if(entries.length>=2){
+      const labels=[...entries].reverse().map(e=>e.label);
+      const data=[...entries].reverse().map(e=>{
+        const avg=STORES.reduce((a,n)=>{const t=calcTotals(n,e.stores&&e.stores[n]);return a+pct(t.total,t.max);},0)/STORES.length;
+        return Math.round(avg);
+      });
+      new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',data:{labels,datasets:[{data,borderColor:'#2C5F2E',backgroundColor:'rgba(44,95,46,0.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#2C5F2E',tension:0.35}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},x:{ticks:{font:{size:11,family:"'Noto Sans JP'"}},grid:{display:false}}}}});
+    }
+  });
+}
+
+function toggleHist(i){
+  const b=document.getElementById('hb'+i),c=document.getElementById('hc'+i);
+  b.classList.toggle('open'); c.classList.toggle('open');
+}
+
+// ──────────────────── Toast ────────────────────
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// グローバルに公開
+window.showView=showView; window.showConfirm=showConfirm; window.hideConfirm=hideConfirm;
+window.doNextMonth=doNextMonth; window.saveCurrentMonth=saveCurrentMonth;
+window.setScore=setScore; window.setComment=setComment; window.setMeta=setMeta;
+window.toggleSec=toggleSec; window.toggleHist=toggleHist;
+
+// ──────────────────── 起動 ────────────────────
+startListening();
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+</body>
+</html>
