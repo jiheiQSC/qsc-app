@@ -106,11 +106,11 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 
 /* SECTIONS */
 .section { margin-bottom: 12px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
-.sec-header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; cursor: pointer; user-select: none; }
+.sec-header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; user-select: none; }
 .sec-header-title { font-size: 14px; font-weight: 700; flex: 1; }
 .sec-score-badge { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text2); background: rgba(255,255,255,0.6); padding: 2px 8px; border-radius: 10px; }
-.sec-chev { font-size: 16px; color: var(--text2); transition: transform 0.2s; }
-.sec-header.open .sec-chev { transform: rotate(180deg); }
+.sec-toggle-btn { font-size: 12px; color: var(--text2); background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 3px 10px; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; white-space: nowrap; }
+.sec-toggle-btn:hover { background: rgba(255,255,255,0.8); }
 .sec-q { background: #DCE9F5; }
 .sec-s { background: #D8EBD3; }
 .sec-c { background: #F5E9D0; }
@@ -118,6 +118,9 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 
 .items-wrap { background: var(--surface); border-top: 1px solid var(--border2); display: none; }
 .items-wrap.open { display: block; }
+.sec-close-bar { display: flex; justify-content: center; padding: 10px; border-top: 1px solid var(--border2); background: var(--surface2); }
+.sec-close-btn { font-size: 12px; color: var(--text2); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 5px 18px; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; }
+.sec-close-btn:hover { background: var(--surface2); border-color: var(--text2); }
 
 .item-row { padding: 12px 14px; border-bottom: 1px solid var(--border2); }
 .item-row:last-child { border-bottom: none; }
@@ -490,24 +493,28 @@ function renderCheck(name){
   const secs=[{k:'q',lbl:'Q クオリティ',cls:'sec-q',items:d.q,sc:sc.q,mx:d.mq},{k:'s',lbl:'S サービス',cls:'sec-s',items:d.s,sc:sc.s,mx:d.ms},{k:'c',lbl:'C クレンリネス',cls:'sec-c',items:d.c,sc:sc.c,mx:d.mc},{k:'m',lbl:'管理',cls:'sec-m',items:d.m,sc:sc.m,mx:d.mm}];
   secs.forEach(sec=>{
     const tot=(sec.sc||[]).reduce((a,i)=>a+(i.score||0),0);
-    html+=`<div class="section"><div class="sec-header open ${sec.cls}" onclick="toggleSec(this,event)"><span class="sec-header-title">${sec.lbl}</span><span class="sec-score-badge">${tot} / ${sec.mx}</span><span class="sec-chev">▾</span></div><div class="items-wrap open">`;
+    html+=`<div class="section" id="sec_${name}_${sec.k}"><div class="sec-header ${sec.cls}"><span class="sec-header-title">${sec.lbl}</span><span class="sec-score-badge" id="badge_${name}_${sec.k}">${tot} / ${sec.mx}</span><button class="sec-toggle-btn" onclick="toggleSec(document.getElementById('sec_${name}_${sec.k}'))">▲ 閉じる</button></div><div class="items-wrap open">`;
     (sec.items||[]).forEach((item,idx)=>{
       const s=(sec.sc&&sec.sc[idx])||{score:0,comment:''};
       const cm=s.comment||'';
       html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea></div><div class="score-btns">${[0,1,2,3,4].map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
     });
+    html+=`<div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_${sec.k}'))">▲ 閉じる</button></div>`;
     html+='</div></div>';
   });
 
-  html+=`<div style="margin-top:8px"><div class="section"><div class="sec-header open" style="background:var(--surface2)" onclick="toggleSec(this,event)"><span class="sec-header-title">📝 全体コメント・本部メモ</span><span class="sec-chev">▾</span></div><div class="items-wrap open"><div class="sec-comment-wrap"><label>店舗コメント／改善ポイント</label><textarea oninput="setMeta('${name}','storeComment',this.value)">${sc.storeComment||''}</textarea></div><div class="sec-comment-wrap"><label>本部コメント</label><textarea oninput="setMeta('${name}','hqComment',this.value)">${sc.hqComment||''}</textarea></div></div></div></div>`;
+  html+=`<div style="margin-top:8px"><div class="section" id="sec_${name}_overall"><div class="sec-header" style="background:var(--surface2)"><span class="sec-header-title">📝 全体コメント・本部メモ</span><button class="sec-toggle-btn" onclick="toggleSec(document.getElementById('sec_${name}_overall'))">▲ 閉じる</button></div><div class="items-wrap open"><div class="sec-comment-wrap"><label>店舗コメント／改善ポイント</label><textarea oninput="setMeta('${name}','storeComment',this.value)">${sc.storeComment||''}</textarea></div><div class="sec-comment-wrap"><label>本部コメント</label><textarea oninput="setMeta('${name}','hqComment',this.value)">${sc.hqComment||''}</textarea></div><div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_overall'))">▲ 閉じる</button></div></div></div></div>`;
   document.getElementById('viewCheck').innerHTML=html;
 }
 
-function toggleSec(hdr, event){
-  // textarea・input・button のクリックは開閉しない
-  if(event && (event.target.tagName==='TEXTAREA'||event.target.tagName==='INPUT'||event.target.tagName==='BUTTON')) return;
-  hdr.classList.toggle('open');
-  hdr.nextElementSibling.classList.toggle('open');
+function toggleSec(secEl){
+  // secEl = .section div
+  const hdr = secEl.querySelector('.sec-header');
+  const wrap = secEl.querySelector('.items-wrap');
+  const btn = secEl.querySelector('.sec-toggle-btn');
+  const isOpen = wrap.classList.contains('open');
+  wrap.classList.toggle('open');
+  if(btn) btn.textContent = isOpen ? '▼ 開く' : '▲ 閉じる';
 }
 
 function setScore(name,key,idx,val){
