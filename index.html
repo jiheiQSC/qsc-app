@@ -273,7 +273,6 @@ const firebaseConfig = {
   appId: "1:835464524805:web:d61f229a68bcf10368586c",
   measurementId: "G-BB5GT4T30R"
 };
-
 // ============================================================
 
 const app = initializeApp(firebaseConfig);
@@ -491,7 +490,7 @@ function renderCheck(name){
   const secs=[{k:'q',lbl:'Q クオリティ',cls:'sec-q',items:d.q,sc:sc.q,mx:d.mq},{k:'s',lbl:'S サービス',cls:'sec-s',items:d.s,sc:sc.s,mx:d.ms},{k:'c',lbl:'C クレンリネス',cls:'sec-c',items:d.c,sc:sc.c,mx:d.mc},{k:'m',lbl:'管理',cls:'sec-m',items:d.m,sc:sc.m,mx:d.mm}];
   secs.forEach(sec=>{
     const tot=(sec.sc||[]).reduce((a,i)=>a+(i.score||0),0);
-    html+=`<div class="section"><div class="sec-header open ${sec.cls}" onclick="toggleSec(this)"><span class="sec-header-title">${sec.lbl}</span><span class="sec-score-badge">${tot} / ${sec.mx}</span><span class="sec-chev">▾</span></div><div class="items-wrap open">`;
+    html+=`<div class="section"><div class="sec-header open ${sec.cls}" onclick="toggleSec(this,event)"><span class="sec-header-title">${sec.lbl}</span><span class="sec-score-badge">${tot} / ${sec.mx}</span><span class="sec-chev">▾</span></div><div class="items-wrap open">`;
     (sec.items||[]).forEach((item,idx)=>{
       const s=(sec.sc&&sec.sc[idx])||{score:0,comment:''};
       const cm=s.comment||'';
@@ -500,11 +499,13 @@ function renderCheck(name){
     html+='</div></div>';
   });
 
-  html+=`<div style="margin-top:8px"><div class="section"><div class="sec-header open" style="background:var(--surface2)" onclick="toggleSec(this)"><span class="sec-header-title">📝 全体コメント・本部メモ</span><span class="sec-chev">▾</span></div><div class="items-wrap open"><div class="sec-comment-wrap"><label>店舗コメント／改善ポイント</label><textarea oninput="setMeta('${name}','storeComment',this.value)">${sc.storeComment||''}</textarea></div><div class="sec-comment-wrap"><label>本部コメント</label><textarea oninput="setMeta('${name}','hqComment',this.value)">${sc.hqComment||''}</textarea></div></div></div></div>`;
+  html+=`<div style="margin-top:8px"><div class="section"><div class="sec-header open" style="background:var(--surface2)" onclick="toggleSec(this,event)"><span class="sec-header-title">📝 全体コメント・本部メモ</span><span class="sec-chev">▾</span></div><div class="items-wrap open"><div class="sec-comment-wrap"><label>店舗コメント／改善ポイント</label><textarea oninput="setMeta('${name}','storeComment',this.value)">${sc.storeComment||''}</textarea></div><div class="sec-comment-wrap"><label>本部コメント</label><textarea oninput="setMeta('${name}','hqComment',this.value)">${sc.hqComment||''}</textarea></div></div></div></div>`;
   document.getElementById('viewCheck').innerHTML=html;
 }
 
-function toggleSec(hdr){
+function toggleSec(hdr, event){
+  // textarea・input・button のクリックは開閉しない
+  if(event && (event.target.tagName==='TEXTAREA'||event.target.tagName==='INPUT'||event.target.tagName==='BUTTON')) return;
   hdr.classList.toggle('open');
   hdr.nextElementSibling.classList.toggle('open');
 }
