@@ -395,6 +395,13 @@ function startListening(){
     ensureCurrentData();
     document.getElementById('monthBadge').textContent=monthLabel(curYear,curMonth);
     document.getElementById('loadingOverlay').classList.add('hide');
+    // フォーカス中のtextarea/inputがあれば再描画をスキップ（キーボードが閉じるのを防ぐ）
+    const focused = document.activeElement;
+    const isTyping = focused && (focused.tagName==='TEXTAREA' || focused.tagName==='INPUT');
+    if(isTyping){
+      // データだけ裏で更新、画面は触らない
+      return;
+    }
     refreshCurrentView();
   }, err=>{
     setSyncState('error');
