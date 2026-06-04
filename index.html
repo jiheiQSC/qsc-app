@@ -295,7 +295,6 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { getStorage, ref as sref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 // ============================================================
 // 🔧 ここにあなたのFirebase設定を貼り付けてください
@@ -314,7 +313,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-const storage = getStorage(app);
 
 // ──────────────────── データ定義 ────────────────────
 const DEFS = {
@@ -638,7 +636,7 @@ function renderCheck(name){
       const cm=s.comment||'';
       const allowedVals = (sec.k==='m' && name!=='酒場') ? [0,2] : [0,1,2,3,4];
       const photos = s.photos||[];
-      const photoThumbsHtml = photos.map((p,pi)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" onclick="openPhotoModal('${p.url}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${sec.k}',${idx},${pi},'${p.path}')" title="削除">×</button></div>`).join('');
+      const photoThumbsHtml = photos.map((p,pi)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.data}" onclick="openPhotoModal('${p.data}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${sec.k}',${idx},${pi})" title="削除">×</button></div>`).join('');
       html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea><div class="photo-area"><label class="photo-upload-btn"><input class="photo-input" type="file" accept="image/*" onchange="uploadPhoto(this,'${name}','${sec.k}',${idx})">📷 写真を添付</label><div class="photo-thumbs" id="thumbs_${name}_${sec.k}_${idx}">${photoThumbsHtml}</div></div></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
     });
     html+=`<div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_${sec.k}'))">▲ 閉じる</button></div>`;
@@ -720,41 +718,34 @@ async function uploadPhoto(inputEl, name, key, idx){
   if(!file) return;
   inputEl.value='';
   const thumbsEl = document.getElementById(`thumbs_${name}_${key}_${idx}`);
-  // スピナー追加
   const spin = document.createElement('div');
   spin.className='photo-uploading';
   spin.innerHTML='<div class="photo-spinner"></div>';
   thumbsEl.appendChild(spin);
   try {
-    // Canvas で圧縮（最大800px・品質0.75）
-    const compressed = await compressImage(file, 800, 0.75);
-    // 2ヶ月後の削除日をパスに埋め込む
+    // Canvas で圧縮してBase64へ（最大600px・品質0.65）
+    const data = await compressToBase64(file, 600, 0.65);
+    // 2ヶ月後の有効期限を計算
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth()+2);
-    const expiryStr = expiry.toISOString().slice(0,10).replace(/-/g,'');
-    const path = `photos/${monthKey(curYear,curMonth)}/${name}/${key}/${idx}/${expiryStr}_${Date.now()}.jpg`;
-    const storageRef = sref(storage, path);
-    await uploadBytes(storageRef, compressed, {contentType:'image/jpeg', customMetadata:{expiryDate:expiryStr}});
-    const url = await getDownloadURL(storageRef);
-    // データに保存
+    const expiryDate = expiry.toISOString().slice(0,10);
     ensureCurrentData();
     if(!appData.current[name][key][idx]) appData.current[name][key][idx]={score:0,comment:''};
     if(!appData.current[name][key][idx].photos) appData.current[name][key][idx].photos=[];
-    appData.current[name][key][idx].photos.push({url, path, uploaded: new Date().toISOString()});
+    appData.current[name][key][idx].photos.push({data, expiryDate, uploaded: new Date().toISOString()});
     schedulePush();
-    // サムネイル追加
     const wrap = document.createElement('div');
     wrap.className='photo-thumb-wrap';
     const pi = appData.current[name][key][idx].photos.length-1;
-    wrap.innerHTML=`<img class="photo-thumb" src="${url}" onclick="openPhotoModal('${url}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${pi},'${path}')" title="削除">×</button>`;
+    wrap.innerHTML=`<img class="photo-thumb" src="${data}" onclick="openPhotoModal('${data}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${pi})" title="削除">×</button>`;
     thumbsEl.replaceChild(wrap, spin);
   } catch(e){
     thumbsEl.removeChild(spin);
-    alert('写真のアップロードに失敗しました: '+e.message);
+    alert('写真の処理に失敗しました: '+e.message);
   }
 }
 
-function compressImage(file, maxPx, quality){
+function compressToBase64(file, maxPx, quality){
   return new Promise((resolve, reject)=>{
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -765,28 +756,24 @@ function compressImage(file, maxPx, quality){
       canvas.width=w; canvas.height=h;
       canvas.getContext('2d').drawImage(img,0,0,w,h);
       URL.revokeObjectURL(url);
-      canvas.toBlob(blob=>{ if(blob) resolve(blob); else reject(new Error('圧縮失敗')); }, 'image/jpeg', quality);
+      const base64 = canvas.toDataURL('image/jpeg', quality);
+      if(base64) resolve(base64); else reject(new Error('圧縮失敗'));
     };
     img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('画像読み込み失敗')); };
     img.src = url;
   });
 }
 
-async function deletePhoto(name, key, idx, pi, path){
+function deletePhoto(name, key, idx, pi){
   if(!confirm('この写真を削除しますか？')) return;
-  try {
-    const storageRef = sref(storage, path);
-    await deleteObject(storageRef);
-  } catch(e){ /* ファイルが既にない場合も続行 */ }
   ensureCurrentData();
   if(appData.current[name][key][idx]&&appData.current[name][key][idx].photos){
     appData.current[name][key][idx].photos.splice(pi,1);
     schedulePush();
-    // サムネイルを再描画
     const thumbsEl = document.getElementById(`thumbs_${name}_${key}_${idx}`);
     if(thumbsEl){
       const photos = appData.current[name][key][idx].photos;
-      thumbsEl.innerHTML = photos.map((p,i)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" onclick="openPhotoModal('${p.url}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${i},'${p.path}')" title="削除">×</button></div>`).join('');
+      thumbsEl.innerHTML = photos.map((p,i)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.data}" onclick="openPhotoModal('${p.data}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${i})" title="削除">×</button></div>`).join('');
     }
   }
 }
