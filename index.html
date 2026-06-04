@@ -163,6 +163,22 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 .ov-no-prev { font-size: 11px; color: var(--text3); font-style: italic; padding: 10px 0 2px; }
 .compare-divider { width: 1px; background: var(--border2); margin: 0 2px; }
 
+/* PHOTO */
+.photo-area { margin-top: 6px; }
+.photo-upload-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; font-size: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm); cursor: pointer; color: var(--text2); background: var(--surface2); font-family: 'Noto Sans JP', sans-serif; transition: all 0.15s; }
+.photo-upload-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+.photo-input { display: none; }
+.photo-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.photo-thumb-wrap { position: relative; display: inline-block; }
+.photo-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; display: block; }
+.photo-del-btn { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%; background: var(--red); color: #fff; border: none; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0; }
+.photo-uploading { width: 72px; height: 72px; border-radius: var(--radius-sm); border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center; background: var(--surface2); }
+.photo-spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: photo-spin 0.7s linear infinite; }
+@keyframes photo-spin { to { transform: rotate(360deg); } }
+.photo-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 20px; }
+.photo-modal img { max-width: 100%; max-height: 90vh; border-radius: var(--radius); object-fit: contain; }
+.photo-modal-close { position: fixed; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: #fff; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
 /* HISTORY */
 .hist-list { display: flex; flex-direction: column; gap: 10px; }
 .hist-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
@@ -279,24 +295,25 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getStorage, ref as sref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 // ============================================================
 // 🔧 ここにあなたのFirebase設定を貼り付けてください
 // ============================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyDLR3zHlhxe7dvYflXAttPF7ieqGXc_X3U",
-  authDomain: "jiheiqsc.firebaseapp.com",
-  databaseURL: "https://jiheiqsc-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "jiheiqsc",
-  storageBucket: "jiheiqsc.firebasestorage.app",
-  messagingSenderId: "835464524805",
-  appId: "1:835464524805:web:d61f229a68bcf10368586c",
-  measurementId: "G-BB5GT4T30R"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 // ============================================================
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const storage = getStorage(app);
 
 // ──────────────────── データ定義 ────────────────────
 const DEFS = {
@@ -619,7 +636,9 @@ function renderCheck(name){
       const s=(sec.sc&&sec.sc[idx])||{score:0,comment:''};
       const cm=s.comment||'';
       const allowedVals = (sec.k==='m' && name!=='酒場') ? [0,2] : [0,1,2,3,4];
-      html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
+      const photos = s.photos||[];
+      const photoThumbsHtml = photos.map((p,pi)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" onclick="openPhotoModal('${p.url}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${sec.k}',${idx},${pi},'${p.path}')" title="削除">×</button></div>`).join('');
+      html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea><div class="photo-area"><label class="photo-upload-btn"><input class="photo-input" type="file" accept="image/*" onchange="uploadPhoto(this,'${name}','${sec.k}',${idx})">📷 写真を添付</label><div class="photo-thumbs" id="thumbs_${name}_${sec.k}_${idx}">${photoThumbsHtml}</div></div></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
     });
     html+=`<div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_${sec.k}'))">▲ 閉じる</button></div>`;
     html+='</div></div>';
@@ -692,6 +711,91 @@ function setMeta(name,field,val){
   ensureCurrentData();
   appData.current[name][field]=val;
   schedulePush();
+}
+
+// ──────────────────── 写真アップロード ────────────────────
+async function uploadPhoto(inputEl, name, key, idx){
+  const file = inputEl.files[0];
+  if(!file) return;
+  inputEl.value='';
+  const thumbsEl = document.getElementById(`thumbs_${name}_${key}_${idx}`);
+  // スピナー追加
+  const spin = document.createElement('div');
+  spin.className='photo-uploading';
+  spin.innerHTML='<div class="photo-spinner"></div>';
+  thumbsEl.appendChild(spin);
+  try {
+    // Canvas で圧縮（最大800px・品質0.75）
+    const compressed = await compressImage(file, 800, 0.75);
+    // 2ヶ月後の削除日をパスに埋め込む
+    const expiry = new Date();
+    expiry.setMonth(expiry.getMonth()+2);
+    const expiryStr = expiry.toISOString().slice(0,10).replace(/-/g,'');
+    const path = `photos/${monthKey(curYear,curMonth)}/${name}/${key}/${idx}/${expiryStr}_${Date.now()}.jpg`;
+    const storageRef = sref(storage, path);
+    await uploadBytes(storageRef, compressed, {contentType:'image/jpeg', customMetadata:{expiryDate:expiryStr}});
+    const url = await getDownloadURL(storageRef);
+    // データに保存
+    ensureCurrentData();
+    if(!appData.current[name][key][idx]) appData.current[name][key][idx]={score:0,comment:''};
+    if(!appData.current[name][key][idx].photos) appData.current[name][key][idx].photos=[];
+    appData.current[name][key][idx].photos.push({url, path, uploaded: new Date().toISOString()});
+    schedulePush();
+    // サムネイル追加
+    const wrap = document.createElement('div');
+    wrap.className='photo-thumb-wrap';
+    const pi = appData.current[name][key][idx].photos.length-1;
+    wrap.innerHTML=`<img class="photo-thumb" src="${url}" onclick="openPhotoModal('${url}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${pi},'${path}')" title="削除">×</button>`;
+    thumbsEl.replaceChild(wrap, spin);
+  } catch(e){
+    thumbsEl.removeChild(spin);
+    alert('写真のアップロードに失敗しました: '+e.message);
+  }
+}
+
+function compressImage(file, maxPx, quality){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      let w=img.width, h=img.height;
+      if(w>maxPx||h>maxPx){ if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;} }
+      const canvas = document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob=>{ if(blob) resolve(blob); else reject(new Error('圧縮失敗')); }, 'image/jpeg', quality);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('画像読み込み失敗')); };
+    img.src = url;
+  });
+}
+
+async function deletePhoto(name, key, idx, pi, path){
+  if(!confirm('この写真を削除しますか？')) return;
+  try {
+    const storageRef = sref(storage, path);
+    await deleteObject(storageRef);
+  } catch(e){ /* ファイルが既にない場合も続行 */ }
+  ensureCurrentData();
+  if(appData.current[name][key][idx]&&appData.current[name][key][idx].photos){
+    appData.current[name][key][idx].photos.splice(pi,1);
+    schedulePush();
+    // サムネイルを再描画
+    const thumbsEl = document.getElementById(`thumbs_${name}_${key}_${idx}`);
+    if(thumbsEl){
+      const photos = appData.current[name][key][idx].photos;
+      thumbsEl.innerHTML = photos.map((p,i)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.url}" onclick="openPhotoModal('${p.url}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${i},'${p.path}')" title="削除">×</button></div>`).join('');
+    }
+  }
+}
+
+function openPhotoModal(url){
+  const modal = document.createElement('div');
+  modal.className='photo-modal';
+  modal.innerHTML=`<button class="photo-modal-close" onclick="this.parentElement.remove()">×</button><img src="${url}" alt="添付写真">`;
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
 // ──────────────────── 履歴 ────────────────────
