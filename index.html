@@ -300,14 +300,13 @@ import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/fir
 // 🔧 ここにあなたのFirebase設定を貼り付けてください
 // ============================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyDLR3zHlhxe7dvYflXAttPF7ieqGXc_X3U",
-  authDomain: "jiheiqsc.firebaseapp.com",
-  databaseURL: "https://jiheiqsc-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "jiheiqsc",
-  storageBucket: "jiheiqsc.firebasestorage.app",
-  messagingSenderId: "835464524805",
-  appId: "1:835464524805:web:d61f229a68bcf10368586c",
-  measurementId: "G-BB5GT4T30R"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 // ============================================================
 
@@ -636,7 +635,7 @@ function renderCheck(name){
       const cm=s.comment||'';
       const allowedVals = (sec.k==='m' && name!=='酒場') ? [0,2] : [0,1,2,3,4];
       const photos = s.photos||[];
-      const photoThumbsHtml = photos.map((p,pi)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.data}" onclick="openPhotoModal('${p.data}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${sec.k}',${idx},${pi})" title="削除">×</button></div>`).join('');
+      const photoThumbsHtml = photos.map((p,pi)=>'<div class="photo-thumb-wrap"><img class="photo-thumb" src="'+p.data+'" onclick="openPhotoModal(this.src)" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto(''+name+'',''+sec.k+'','+idx+','+pi+')" title="削除">×</button></div>').join('');
       html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea><div class="photo-area"><label class="photo-upload-btn"><input class="photo-input" type="file" accept="image/*" onchange="uploadPhoto(this,'${name}','${sec.k}',${idx})">📷 写真を添付</label><div class="photo-thumbs" id="thumbs_${name}_${sec.k}_${idx}">${photoThumbsHtml}</div></div></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
     });
     html+=`<div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_${sec.k}'))">▲ 閉じる</button></div>`;
@@ -717,30 +716,32 @@ async function uploadPhoto(inputEl, name, key, idx){
   const file = inputEl.files[0];
   if(!file) return;
   inputEl.value='';
-  const thumbsEl = document.getElementById(`thumbs_${name}_${key}_${idx}`);
+  idx = parseInt(idx); // 必ず数値に変換
+  const thumbsEl = document.getElementById('thumbs_'+name+'_'+key+'_'+idx);
+  if(!thumbsEl){ console.error('thumbsEl not found', name, key, idx); return; }
   const spin = document.createElement('div');
   spin.className='photo-uploading';
   spin.innerHTML='<div class="photo-spinner"></div>';
   thumbsEl.appendChild(spin);
   try {
-    // Canvas で圧縮してBase64へ（最大600px・品質0.65）
     const data = await compressToBase64(file, 600, 0.65);
-    // 2ヶ月後の有効期限を計算
     const expiry = new Date();
     expiry.setMonth(expiry.getMonth()+2);
     const expiryDate = expiry.toISOString().slice(0,10);
     ensureCurrentData();
-    if(!appData.current[name][key][idx]) appData.current[name][key][idx]={score:0,comment:''};
-    if(!appData.current[name][key][idx].photos) appData.current[name][key][idx].photos=[];
-    appData.current[name][key][idx].photos.push({data, expiryDate, uploaded: new Date().toISOString()});
+    const item = appData.current[name][key][idx];
+    if(!item){ console.error('item not found', name, key, idx, appData.current[name][key]); thumbsEl.removeChild(spin); return; }
+    if(!item.photos) item.photos=[];
+    item.photos.push({data, expiryDate, uploaded: new Date().toISOString()});
     schedulePush();
     const wrap = document.createElement('div');
     wrap.className='photo-thumb-wrap';
-    const pi = appData.current[name][key][idx].photos.length-1;
-    wrap.innerHTML=`<img class="photo-thumb" src="${data}" onclick="openPhotoModal('${data}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${pi})" title="削除">×</button>`;
+    const pi = item.photos.length-1;
+    wrap.innerHTML='<img class="photo-thumb" src="'+data+'" onclick="openPhotoModal(this.src)" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto(''+name+'',''+key+'','+idx+','+pi+')" title="削除">×</button>';
     thumbsEl.replaceChild(wrap, spin);
   } catch(e){
-    thumbsEl.removeChild(spin);
+    console.error('uploadPhoto error', e);
+    if(thumbsEl.contains(spin)) thumbsEl.removeChild(spin);
     alert('写真の処理に失敗しました: '+e.message);
   }
 }
@@ -773,15 +774,16 @@ function deletePhoto(name, key, idx, pi){
     const thumbsEl = document.getElementById(`thumbs_${name}_${key}_${idx}`);
     if(thumbsEl){
       const photos = appData.current[name][key][idx].photos;
-      thumbsEl.innerHTML = photos.map((p,i)=>`<div class="photo-thumb-wrap"><img class="photo-thumb" src="${p.data}" onclick="openPhotoModal('${p.data}')" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto('${name}','${key}',${idx},${i})" title="削除">×</button></div>`).join('');
+      thumbsEl.innerHTML = photos.map((p,i)=>'<div class="photo-thumb-wrap"><img class="photo-thumb" src="'+p.data+'" onclick="openPhotoModal(this.src)" loading="lazy"><button class="photo-del-btn" onclick="deletePhoto(''+name+'',''+key+'','+idx+','+i+')" title="削除">×</button></div>').join('');
     }
   }
 }
 
-function openPhotoModal(url){
+function openPhotoModal(src){
   const modal = document.createElement('div');
   modal.className='photo-modal';
-  modal.innerHTML=`<button class="photo-modal-close" onclick="this.parentElement.remove()">×</button><img src="${url}" alt="添付写真">`;
+  const imgSrc = (typeof src==='string') ? src : src.src;
+  modal.innerHTML='<button class="photo-modal-close" onclick="this.parentElement.remove()">×</button><img src="'+imgSrc+'" alt="添付写真">';
   modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
   document.body.appendChild(modal);
 }
