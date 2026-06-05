@@ -163,6 +163,17 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 .ov-no-prev { font-size: 11px; color: var(--text3); font-style: italic; padding: 10px 0 2px; }
 .compare-divider { width: 1px; background: var(--border2); margin: 0 2px; }
 
+/* PHOTO */
+.photo-wrap { margin-top: 8px; }
+.photo-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; font-size: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text2); background: var(--surface2); cursor: pointer; font-family: 'Noto Sans JP', sans-serif; }
+.photo-btn:hover { border-color: var(--accent); color: var(--accent); }
+.photo-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.photo-item { position: relative; }
+.photo-img { width: 70px; height: 70px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; display: block; }
+.photo-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--red); color: #fff; border: none; cursor: pointer; font-size: 12px; line-height: 20px; text-align: center; padding: 0; }
+.photo-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; cursor: pointer; }
+.photo-modal img { max-width: 100%; max-height: 88vh; border-radius: var(--radius); object-fit: contain; }
+
 /* HISTORY */
 .hist-list { display: flex; flex-direction: column; gap: 10px; }
 .hist-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
@@ -619,7 +630,11 @@ function renderCheck(name){
       const s=(sec.sc&&sec.sc[idx])||{score:0,comment:''};
       const cm=s.comment||'';
       const allowedVals = (sec.k==='m' && name!=='酒場') ? [0,2] : [0,1,2,3,4];
-      html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
+      const existPhotos = (s.photos||[]);
+      const photoListHtml = existPhotos.map((p,pi)=>
+        `<div class="photo-item"><img class="photo-img" src="${p}" data-pi="${pi}" onclick="showPhoto(this.src)"><button class="photo-x" data-name="${name}" data-key="${sec.k}" data-idx="${idx}" data-pi="${pi}" onclick="removePhotoBtn(this)">×</button></div>`
+      ).join('');
+      html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea><div class="photo-wrap"><label class="photo-btn">📷 写真を添付<input type="file" accept="image/*" style="display:none" onchange="addPhoto(this,'${name}','${sec.k}',${idx})"></label><div class="photo-list" id="pl_${name}_${sec.k}_${idx}">${photoListHtml}</div></div></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
     });
     html+=`<div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_${sec.k}'))">▲ 閉じる</button></div>`;
     html+='</div></div>';
@@ -694,7 +709,106 @@ function setMeta(name,field,val){
   schedulePush();
 }
 
-// ──────────────────── 写真アップロード ────────────────────
+// ──────────────────── 写真 ────────────────────
+function addPhoto(input, name, key, idx){
+  const file = input.files[0];
+  if(!file) return;
+  input.value = '';
+  idx = parseInt(idx);
+  const reader = new FileReader();
+  reader.onload = function(e){
+    // Canvas で圧縮（最大640px・JPEG70%）
+    const img = new Image();
+    img.onload = function(){
+      const MAX = 640;
+      let w = img.width, h = img.height;
+      if(w > MAX || h > MAX){
+        if(w > h){ h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      const b64 = cv.toDataURL('image/jpeg', 0.7);
+      // データに保存
+      ensureCurrentData();
+      const item = appData.current[name][key][idx];
+      if(!item.photos) item.photos = [];
+      item.photos.push(b64);
+      schedulePush();
+      // サムネイル追加
+      const pl = document.getElementById('pl_' + name + '_' + key + '_' + idx);
+      if(pl){
+        const pi = item.photos.length - 1;
+        const div = document.createElement('div');
+        div.className = 'photo-item';
+        const imgEl = document.createElement('img');
+        imgEl.className = 'photo-img';
+        imgEl.src = b64;
+        imgEl.onclick = function(){ showPhoto(this.src); };
+        const btnEl = document.createElement('button');
+        btnEl.className = 'photo-x';
+        btnEl.textContent = '×';
+        btnEl.dataset.name = name;
+        btnEl.dataset.key = key;
+        btnEl.dataset.idx = idx;
+        btnEl.dataset.pi = pi;
+        btnEl.onclick = function(){ removePhotoBtn(this); };
+        div.appendChild(imgEl);
+        div.appendChild(btnEl);
+        pl.appendChild(div);
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePhotoBtn(btn){
+  if(!confirm('この写真を削除しますか？')) return;
+  const name = btn.dataset.name;
+  const key  = btn.dataset.key;
+  const idx  = parseInt(btn.dataset.idx);
+  const pi   = parseInt(btn.dataset.pi);
+  ensureCurrentData();
+  const item = appData.current[name][key][idx];
+  if(item && item.photos){ item.photos.splice(pi, 1); schedulePush(); }
+  // サムネイル再描画
+  const pl = document.getElementById('pl_' + name + '_' + key + '_' + idx);
+  if(pl && item && item.photos){ rebuildThumbs(pl, item.photos, name, key, idx); }
+}
+
+function rebuildThumbs(pl, photos, name, key, idx){
+  pl.innerHTML = '';
+  photos.forEach(function(p, i){
+    const div = document.createElement('div');
+    div.className = 'photo-item';
+    const imgEl = document.createElement('img');
+    imgEl.className = 'photo-img';
+    imgEl.src = p;
+    imgEl.onclick = function(){ showPhoto(this.src); };
+    const btnEl = document.createElement('button');
+    btnEl.className = 'photo-x';
+    btnEl.textContent = '×';
+    btnEl.dataset.name = name;
+    btnEl.dataset.key = key;
+    btnEl.dataset.idx = idx;
+    btnEl.dataset.pi = i;
+    btnEl.onclick = function(){ removePhotoBtn(this); };
+    div.appendChild(imgEl);
+    div.appendChild(btnEl);
+    pl.appendChild(div);
+  });
+}
+
+function showPhoto(src){
+  const m = document.createElement('div');
+  m.className = 'photo-modal';
+  m.innerHTML = '<img src="' + src + '">';
+  m.onclick = () => m.remove();
+  document.body.appendChild(m);
+}
+
 // ──────────────────── 履歴 ────────────────────
 function renderHistory(){
   const el=document.getElementById('viewHistory');
