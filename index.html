@@ -226,6 +226,26 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 .loading-logo span { color: var(--accent); }
 .loading-spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media print {
+  .top-bar, .nav-scroll, .confirm-box,
+  .btn, .sec-toggle-btn, .sec-close-bar,
+  .score-btns, .photo-btn, .photo-x,
+  .sync-indicator { display: none !important; }
+  body { background: #fff !important; }
+  .main { padding: 0 !important; }
+  .main-inner { padding: 0 !important; max-width: 100% !important; }
+  .section { box-shadow: none !important; border: 1px solid #ccc !important; page-break-inside: avoid; }
+  .items-wrap { display: block !important; }
+  .item-comment { border: 1px solid #ddd !important; background: #fff !important; height: auto !important; min-height: 40px; }
+  .score-card { border: 1px solid #ccc !important; box-shadow: none !important; }
+  .ov-card { border: 1px solid #ccc !important; box-shadow: none !important; page-break-inside: avoid; }
+  .chart-card { display: none !important; }
+  .pb { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sb.v0,.sb.v1,.sb.v2,.sb.v3,.sb.v4 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-title { display: block !important; }
+}
+.print-title { display: none; font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -250,6 +270,7 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
         </div>
         <button class="btn btn-save" onclick="saveCurrentMonth()">💾 保存</button>
         <button class="btn btn-next" onclick="showConfirm()">📅 次月</button>
+        <button class="btn" onclick="printCurrentView()" style="border-color:var(--text2);">🖨️ 印刷</button>
       </div>
     </div>
   </div>
@@ -858,11 +879,31 @@ function showToast(msg){
 }
 
 // グローバルに公開
+// ──────────────────── 印刷 ────────────────────
+function printCurrentView(){
+  // 印刷タイトルを設定
+  let title = '治兵衛 QSCチェック表 ' + monthLabel(curYear, curMonth);
+  if(curView === 'check' && curStore) title += ' ― ' + curStore + '店';
+  else if(curView === 'history') title += ' ― 月別履歴';
+
+  // 既存の印刷タイトルを削除して再生成
+  const old = document.getElementById('printTitle');
+  if(old) old.remove();
+  const titleEl = document.createElement('div');
+  titleEl.id = 'printTitle';
+  titleEl.className = 'print-title';
+  titleEl.textContent = title;
+  document.querySelector('.main-inner').prepend(titleEl);
+
+  window.print();
+}
+
 window.showView=showView; window.showConfirm=showConfirm; window.hideConfirm=hideConfirm;
 window.doNextMonth=doNextMonth; window.saveCurrentMonth=saveCurrentMonth;
 window.setScore=setScore; window.setComment=setComment; window.setMeta=setMeta;
 window.toggleSec=toggleSec; window.toggleHist=toggleHist;
 window.addPhoto=addPhoto; window.removePhotoBtn=removePhotoBtn; window.showPhoto=showPhoto;
+window.printCurrentView=printCurrentView;
 
 // ──────────────────── 起動 ────────────────────
 startListening();
