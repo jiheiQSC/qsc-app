@@ -316,14 +316,13 @@ import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/fir
 // 🔧 ここにあなたのFirebase設定を貼り付けてください
 // ============================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyDLR3zHlhxe7dvYflXAttPF7ieqGXc_X3U",
-  authDomain: "jiheiqsc.firebaseapp.com",
-  databaseURL: "https://jiheiqsc-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "jiheiqsc",
-  storageBucket: "jiheiqsc.firebasestorage.app",
-  messagingSenderId: "835464524805",
-  appId: "1:835464524805:web:d61f229a68bcf10368586c",
-  measurementId: "G-BB5GT4T30R"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 // ============================================================
 
@@ -438,8 +437,8 @@ function startListening(){
     const val=snap.val();
     if(val){
       appData.current=val.stores||{};
-      if(val.year) curYear=val.year;
-      if(val.month) curMonth=val.month;
+      // year/monthはコード側の値を正とし、Firebaseの値で上書きしない
+      // （次月ボタンで月を進めた後にFirebaseの古い月に戻るのを防ぐ）
     }
     ensureCurrentData();
     document.getElementById('monthBadge').textContent=monthLabel(curYear,curMonth);
