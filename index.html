@@ -269,7 +269,7 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
           <span id="syncLabel">接続中...</span>
         </div>
         <button class="btn btn-save" onclick="saveCurrentMonth()">💾 保存</button>
-        <button class="btn btn-next" onclick="showConfirm()">📅 次月</button>
+        <button class="btn btn-next" onclick="showConfirm()">📅 月切替</button>
         <button class="btn" onclick="printCurrentView()" style="border-color:var(--text2);">🖨️ 印刷</button>
       </div>
     </div>
@@ -279,7 +279,7 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
     <div class="main-inner">
 
       <div class="confirm-box" id="confirmBox">
-        <p>現在のデータを保存してから、<strong>全店舗のスコア・コメントをリセット</strong>して次月分を作成します。よろしいですか？</p>
+        <p>現在のデータを履歴に保存してから、<strong>全店舗のスコア・コメントをリセット</strong>して翌月分を作成します。<br>※月初になると自動で切り替わります。よろしいですか？</p>
         <div class="confirm-actions">
           <button class="btn btn-danger" onclick="doNextMonth()">✅ 保存してリセット</button>
           <button class="btn btn-cancel" onclick="hideConfirm()">キャンセル</button>
@@ -377,16 +377,46 @@ const DEFS = {
 const STORES = Object.keys(DEFS);
 
 // ──────────────────── 状態 ────────────────────
-let curYear = 8, curMonth = 6;
+// 端末の日付から令和年・月を自動設定
+function getReiwaMonth(){
+  const now = new Date();
+  const y = now.getFullYear() - 2018; // 令和年
+  const m = now.getMonth() + 1;
+  return { y, m };
+}
+const _now = getReiwaMonth();
+let curYear = _now.y, curMonth = _now.m;
 let curStore = null;
 let curView = 'overview';
 let appData = { current: {}, history: [] };
 let ovChart = null;
 let saveTimer = null;
 let isListening = false;
+let monthCheckTimer = null;
 
 function monthKey(y,m){ return `R${y}_${String(m).padStart(2,'0')}`; }
 function monthLabel(y,m){ return `令和${y}年${m}月`; }
+
+// 月が変わっていないか定期チェック（1分ごと）
+function startMonthWatcher(){
+  if(monthCheckTimer) clearInterval(monthCheckTimer);
+  monthCheckTimer = setInterval(()=>{
+    const {y, m} = getReiwaMonth();
+    if(y !== curYear || m !== curMonth){
+      // 月が変わった → 現在データを履歴に保存してリセット
+      saveCurrentMonth().then(()=>{
+        curYear = y; curMonth = m;
+        STORES.forEach(n=>{ appData.current[n]=emptyStore(n); });
+        isListening = false;
+        document.getElementById('monthBadge').textContent = monthLabel(curYear,curMonth);
+        startListening();
+        pushData();
+        showToast(monthLabel(curYear,curMonth)+'に自動切り替えしました');
+        refreshCurrentView();
+      });
+    }
+  }, 60000); // 1分ごとにチェック
+}
 function pct(v,max){ return max>0?Math.round(v/max*100):0; }
 function scoreColor(p){ return p>=80?'#2C5F2E':p>=60?'#92520A':'#8B2020'; }
 function badgeClass(p){ return p>=80?'bg-green':p>=60?'bg-amber':'bg-red'; }
@@ -486,8 +516,15 @@ function hideConfirm(){ document.getElementById('confirmBox').classList.remove('
 
 async function doNextMonth(){
   await saveCurrentMonth();
-  curMonth++;
-  if(curMonth>12){curMonth=1;curYear++;}
+  // 端末の現在月を取得して切り替え（手動でも常に正しい月へ）
+  const {y, m} = getReiwaMonth();
+  // 現在月より先なら+1、そうでなければ端末の月を使用
+  if(y > curYear || (y === curYear && m > curMonth)){
+    curYear = y; curMonth = m;
+  } else {
+    curMonth++;
+    if(curMonth>12){curMonth=1;curYear++;}
+  }
   STORES.forEach(n=>{ appData.current[n]=emptyStore(n); });
   isListening=false;
   document.getElementById('monthBadge').textContent=monthLabel(curYear,curMonth);
@@ -906,6 +943,7 @@ window.printCurrentView=printCurrentView;
 
 // ──────────────────── 起動 ────────────────────
 startListening();
+startMonthWatcher();
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
