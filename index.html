@@ -276,7 +276,6 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
           <span id="syncLabel">接続中...</span>
         </div>
         <button class="btn btn-save" onclick="saveCurrentMonth()">💾 保存</button>
-        <button class="btn btn-next" onclick="showConfirm()">📅 月切替</button>
         <button class="btn" onclick="printCurrentView()" style="border-color:var(--text2);">🖨️ 印刷</button>
       </div>
     </div>
@@ -285,13 +284,6 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
   <div class="main">
     <div class="main-inner">
 
-      <div class="confirm-box" id="confirmBox">
-        <p>現在のデータを履歴に保存してから、<strong>全店舗のスコア・コメントをリセット</strong>して翌月分を作成します。<br>※月初になると自動で切り替わります。よろしいですか？</p>
-        <div class="confirm-actions">
-          <button class="btn btn-danger" onclick="doNextMonth()">✅ 保存してリセット</button>
-          <button class="btn btn-cancel" onclick="hideConfirm()">キャンセル</button>
-        </div>
-      </div>
 
       <div class="nav-scroll">
         <div class="nav-tabs" id="navTabs">
@@ -595,54 +587,80 @@ function refreshCurrentView(){
 }
 
 // ──────────────────── 全店集計 ────────────────────
-function prevMonthKey(){
-  let y=curYear, m=curMonth-1;
-  if(m<1){m=12;y--;}
-  return `R${y}_${String(m).padStart(2,'0')}`;
-}
-function prevMonthLabel(){
-  let y=curYear, m=curMonth-1;
-  if(m<1){m=12;y--;}
-  return `令和${y}年${m}月`;
+let ovSelectedY = null, ovSelectedM = null;
+
+function ovMonthOptions(){
+  const now = getReiwaMonth();
+  const opts = [];
+  for(let i = -5; i <= 0; i++){
+    let y=now.y, m=now.m+i;
+    if(m<=0){m+=12;y--;}
+    if(m>12){m-=12;y++;}
+    const sel=(y===ovSelectedY&&m===ovSelectedM)?'selected':'';
+    opts.push(`<option value="${y}_${m}" ${sel}>${monthLabel(y,m)}</option>`);
+  }
+  return opts.join('');
 }
 
 function renderOverview(){
+  // 初回は今月をデフォルト選択
+  if(!ovSelectedY){
+    const now=getReiwaMonth();
+    ovSelectedY=now.y; ovSelectedM=now.m;
+  }
   const el=document.getElementById('viewOverview');
   el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)">読み込み中...</div>';
-  const histRef=ref(db,`qsc_history/${prevMonthKey()}`);
-  get(histRef).then(snap=>{
-    const prevData=snap.val();
-    buildOverviewHTML(el, prevData);
-  }).catch(()=>{ buildOverviewHTML(el, null); });
+  loadOverviewForMonth(ovSelectedY, ovSelectedM);
 }
 
-function buildOverviewHTML(el, prevData){
-  const hasPrev = !!(prevData && prevData.stores);
-  let html=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">`;
-  html+=`<span style="font-size:13px;font-weight:700;color:var(--text);">今月 vs 前月比較</span>`;
-  if(hasPrev){
-    html+=`<span style="font-size:12px;color:var(--text3);">前月：${prevMonthLabel()}</span>`;
-    html+=`<span style="font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:2px 8px;color:var(--text2);">↑ 改善 ↓ 悪化</span>`;
-  } else {
-    html+=`<span style="font-size:12px;color:var(--text3);">（前月データなし）</span>`;
-  }
-  html+=`</div><div class="ov-grid">`;
+async function loadOverviewForMonth(y, m){
+  const el=document.getElementById('viewOverview');
+  const key=monthKey(y,m);
+  // 選択月のデータをqsc_storeから取得
+  const storeSnap = await get(ref(db,`qsc_store/${key}`)).catch(()=>null);
+  const storeData = storeSnap&&storeSnap.exists() ? storeSnap.val() : {};
+  // 前月データも取得
+  let py=y, pm=m-1; if(pm<=0){pm+=12;py--;}
+  const prevKey=monthKey(py,pm);
+  const prevSnap = await get(ref(db,`qsc_store/${prevKey}`)).catch(()=>null);
+  const prevData = prevSnap&&prevSnap.exists() ? prevSnap.val() : null;
+  buildOverviewHTML(el, storeData, prevData, y, m, py, pm);
+}
+
+function changeOverviewMonth(val){
+  const [y,m]=val.split('_').map(Number);
+  ovSelectedY=y; ovSelectedM=m;
+  loadOverviewForMonth(y,m);
+}
+
+function buildOverviewHTML(el, storeData, prevData, y, m, py, pm){
+  const hasPrev = !!(prevData && Object.keys(prevData).length>0);
+  const selLabel = monthLabel(y,m);
+  const prevLabel = monthLabel(py,pm);
+
+  let html=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+    <span style="font-size:13px;font-weight:700;color:var(--text);">月を選択：</span>
+    <select class="month-select" onchange="changeOverviewMonth(this.value)">${ovMonthOptions()}</select>
+    <span style="font-size:12px;color:var(--text3);">${hasPrev?'前月：'+prevLabel+' との比較':'（前月データなし）'}</span>
+    ${hasPrev?'<span style="font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:2px 8px;color:var(--text2);">↑ 改善 ↓ 悪化</span>':''}
+  </div><div class="ov-grid">`;
 
   STORES.forEach(n=>{
-    const t=calcTotals(n);
+    const sc = storeData[n] || emptyStore(n);
+    const t = calcTotalsFromSc(n, sc);
     const tp=pct(t.total,t.max);
     const col=scoreColor(tp);
-    const pt = hasPrev ? calcTotals(n, prevData.stores[n]) : null;
+    const psc = hasPrev ? (prevData[n]||emptyStore(n)) : null;
+    const pt = psc ? calcTotalsFromSc(n,psc) : null;
     const ptp = pt ? pct(pt.total,pt.max) : null;
 
-    function diff(cur,prv){ if(prv===null)return ''; const d=cur-prv; if(d>0)return `<span class="ov-diff up">+${d}</span>`; if(d<0)return `<span class="ov-diff down">${d}</span>`; return `<span class="ov-diff same">±0</span>`; }
     function diffPct(cur,prv){ if(prv===null)return ''; const d=cur-prv; if(d>0)return `<span class="ov-diff up">+${d}%</span>`; if(d<0)return `<span class="ov-diff down">${d}%</span>`; return `<span class="ov-diff same">±0%</span>`; }
 
     html+=`<div class="ov-card" onclick="showView('check','${n}')"><div class="ov-store">${n}店</div>`;
     if(hasPrev){
       html+=`<div class="ov-compare">
         <div>
-          <div class="ov-col-label">今月</div>
+          <div class="ov-col-label">${selLabel.replace('令和','R').replace('年','年').replace('月','月')}</div>
           <div class="ov-row"><span>Q</span><span>${t.q}/${t.mq}</span></div>
           <div class="ov-row"><span>S</span><span>${t.s}/${t.ms}</span></div>
           <div class="ov-row"><span>C</span><span>${t.c}/${t.mc}</span></div>
@@ -659,7 +677,7 @@ function buildOverviewHTML(el, prevData){
         </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border2);padding-top:8px;margin-top:2px;">
-        <div style="font-size:11px;color:var(--text3);">${tp}% → ${ptp}%</div>
+        <div style="font-size:11px;color:var(--text3);">${ptp}% → ${tp}%</div>
         <div style="font-size:13px;font-weight:700;">${diffPct(tp,ptp)}</div>
       </div>`;
     } else {
@@ -675,34 +693,28 @@ function buildOverviewHTML(el, prevData){
   });
 
   html+=`</div>`;
-
-  // Chart: grouped bar if prev exists
   if(hasPrev){
-    html+=`<div class="chart-card"><div class="chart-title">今月 vs 前月 達成度</div><div style="position:relative;height:220px"><canvas id="ovChart"></canvas></div></div>`;
+    html+=`<div class="chart-card"><div class="chart-title">${selLabel} vs 前月 達成度</div><div style="position:relative;height:220px"><canvas id="ovChart"></canvas></div></div>`;
   } else {
-    html+=`<div class="chart-card"><div class="chart-title">全店達成度</div><div style="position:relative;height:200px"><canvas id="ovChart"></canvas></div></div>`;
+    html+=`<div class="chart-card"><div class="chart-title">${selLabel} 全店達成度</div><div style="position:relative;height:200px"><canvas id="ovChart"></canvas></div></div>`;
   }
 
   el.innerHTML=html;
   if(ovChart)ovChart.destroy();
 
+  const curData=STORES.map(n=>{ const sc=storeData[n]||emptyStore(n); const t=calcTotalsFromSc(n,sc); return pct(t.total,t.max); });
   if(hasPrev){
-    const curData=STORES.map(n=>{const t=calcTotals(n);return pct(t.total,t.max);});
-    const prvData=STORES.map(n=>{const t=calcTotals(n,prevData.stores[n]);return pct(t.total,t.max);});
+    const prvData=STORES.map(n=>{ const sc=prevData[n]||emptyStore(n); const t=calcTotalsFromSc(n,sc); return pct(t.total,t.max); });
     ovChart=new Chart(document.getElementById('ovChart').getContext('2d'),{
       type:'bar',
-      data:{
-        labels:STORES.map(n=>n+'店'),
-        datasets:[
-          {label:'今月',data:curData,backgroundColor:curData.map(v=>v>=80?'#3CAA5A':v>=60?'#E09020':'#D04040'),borderWidth:0,borderRadius:4},
-          {label:'前月',data:prvData,backgroundColor:'rgba(160,152,144,0.4)',borderWidth:0,borderRadius:4}
-        ]
-      },
+      data:{labels:STORES.map(n=>n+'店'),datasets:[
+        {label:selLabel,data:curData,backgroundColor:curData.map(v=>v>=80?'#3CAA5A':v>=60?'#E09020':'#D04040'),borderWidth:0,borderRadius:4},
+        {label:'前月',data:prvData,backgroundColor:'rgba(160,152,144,0.4)',borderWidth:0,borderRadius:4}
+      ]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{font:{size:11,family:"'Noto Sans JP'"},boxWidth:12,padding:12}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},x:{ticks:{font:{size:11,family:"'Noto Sans JP'"}},grid:{display:false}}}}
     });
   } else {
-    const data=STORES.map(n=>{const t=calcTotals(n);return pct(t.total,t.max);});
-    ovChart=new Chart(document.getElementById('ovChart').getContext('2d'),{type:'bar',data:{labels:STORES.map(n=>n+'店'),datasets:[{data,backgroundColor:data.map(v=>v>=80?'#3CAA5A':v>=60?'#E09020':'#D04040'),borderWidth:0,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},x:{ticks:{font:{size:11,family:"'Noto Sans JP'"}},grid:{display:false}}}}});
+    ovChart=new Chart(document.getElementById('ovChart').getContext('2d'),{type:'bar',data:{labels:STORES.map(n=>n+'店'),datasets:[{data:curData,backgroundColor:curData.map(v=>v>=80?'#3CAA5A':v>=60?'#E09020':'#D04040'),borderWidth:0,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%',font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}},x:{ticks:{font:{size:11,family:"'Noto Sans JP'"}},grid:{display:false}}}}});
   }
 }
 
@@ -1145,6 +1157,7 @@ window.addPhoto=addPhoto; window.removePhotoBtn=removePhotoBtn; window.showPhoto
 window.addStorePhoto=addStorePhoto; window.removeStorePhotoBtn=removeStorePhotoBtn;
 window.setStoreScore=setStoreScore; window.setStoreComment=setStoreComment; window.setStoreMeta=setStoreMeta;
 window.changeStoreMonth=changeStoreMonth;
+window.changeOverviewMonth=changeOverviewMonth;
 window.printCurrentView=printCurrentView;
 window.getReiwaMonth=getReiwaMonth; window.startMonthWatcher=startMonthWatcher;
 
