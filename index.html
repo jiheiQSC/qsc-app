@@ -914,7 +914,6 @@ function showToast(msg){
   setTimeout(()=>t.classList.remove('show'),2800);
 }
 
-// グローバルに公開
 // ──────────────────── 印刷 ────────────────────
 function printCurrentView(){
   // 印刷タイトルを設定
@@ -940,6 +939,7 @@ window.setScore=setScore; window.setComment=setComment; window.setMeta=setMeta;
 window.toggleSec=toggleSec; window.toggleHist=toggleHist;
 window.addPhoto=addPhoto; window.removePhotoBtn=removePhotoBtn; window.showPhoto=showPhoto;
 window.printCurrentView=printCurrentView;
+window.getReiwaMonth=getReiwaMonth; window.startMonthWatcher=startMonthWatcher;
 
 // ──────────────────── 起動 ────────────────────
 startListening();
