@@ -163,6 +163,13 @@ body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: va
 .ov-no-prev { font-size: 11px; color: var(--text3); font-style: italic; padding: 10px 0 2px; }
 .compare-divider { width: 1px; background: var(--border2); margin: 0 2px; }
 
+/* MONTH SELECTOR */
+.month-select-wrap { display:flex; align-items:center; gap:8px; margin-bottom:14px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; flex-wrap:wrap; }
+.month-select-label { font-size:13px; color:var(--text2); font-weight:500; }
+.month-select { font-size:14px; font-weight:700; padding:5px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); font-family:'Noto Sans JP',sans-serif; cursor:pointer; }
+.month-select:focus { outline:none; border-color:var(--accent); }
+.month-loading { font-size:12px; color:var(--text3); }
+
 /* PHOTO */
 .photo-wrap { margin-top: 8px; }
 .photo-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; font-size: 12px; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text2); background: var(--surface2); cursor: pointer; font-family: 'Noto Sans JP', sans-serif; }
@@ -390,6 +397,8 @@ let curYear = _now.y, curMonth = _now.m;
 let curStore = null;
 let curView = 'overview';
 let appData = { current: {}, history: [] };
+// 店舗ごとに選択中の月を管理（例: { '丸の内': {y:8,m:8}, '酒場': {y:8,m:8} }）
+let storeMonths = {};
 let ovChart = null;
 let saveTimer = null;
 let isListening = false;
@@ -457,6 +466,33 @@ function setSyncState(state){
 }
 
 function dbPath(){ return `qsc/${monthKey(curYear,curMonth)}`; }
+function storeMonthKey(name){
+  const sm = storeMonths[name] || getReiwaMonth();
+  return monthKey(sm.y, sm.m);
+}
+function storeMonthLabel(name){
+  const sm = storeMonths[name] || getReiwaMonth();
+  return monthLabel(sm.y, sm.m);
+}
+// 店舗別月のデータをFirebaseから取得
+async function loadStoreMonth(name, y, m){
+  const key = monthKey(y, m);
+  const snap = await get(ref(db, `qsc_store/${key}/${name}`));
+  if(snap.exists()){
+    return snap.val();
+  }
+  return emptyStore(name);
+}
+// 店舗別月のデータをFirebaseに保存
+function saveStoreData(name){
+  const sm = storeMonths[name] || getReiwaMonth();
+  const key = monthKey(sm.y, sm.m);
+  if(!appData.stores) appData.stores={};
+  if(!appData.stores[key]) appData.stores[key]={};
+  set(ref(db, `qsc_store/${key}/${name}`), appData.stores[key][name]||emptyStore(name))
+    .then(()=>setSyncState('synced'))
+    .catch(()=>setSyncState('error'));
+}
 
 function startListening(){
   if(isListening) return;
@@ -671,12 +707,35 @@ function buildOverviewHTML(el, prevData){
 }
 
 // ──────────────────── 店舗チェック ────────────────────
-function renderCheck(name){
-  ensureCurrentData();
-  const sc=appData.current[name];
+function buildMonthOptions(selectedY, selectedM){
+  const now = getReiwaMonth();
+  const opts = [];
+  // 過去3ヶ月 + 今月 + 来月 の選択肢を生成
+  for(let i = -3; i <= 1; i++){
+    let y = now.y, m = now.m + i;
+    if(m <= 0){ m += 12; y--; }
+    if(m > 12){ m -= 12; y++; }
+    const sel = (y===selectedY && m===selectedM) ? 'selected' : '';
+    opts.push(`<option value="${y}_${m}" ${sel}>${monthLabel(y,m)}</option>`);
+  }
+  return opts.join('');
+}
+
+async function renderCheck(name){
+  document.getElementById('viewCheck').innerHTML='<div style="padding:20px;color:var(--text3);font-size:13px;">読み込み中...</div>';
+  // 店舗の選択月を初期化（未設定なら端末の現在月）
+  if(!storeMonths[name]) storeMonths[name] = getReiwaMonth();
+  const sm = storeMonths[name];
+  // Firebaseから該当月のデータを取得
+  const sc = await loadStoreMonth(name, sm.y, sm.m);
+  if(!appData.stores) appData.stores={};
+  const key = monthKey(sm.y, sm.m);
+  if(!appData.stores[key]) appData.stores[key]={};
+  appData.stores[key][name] = sc;
   const d=DEFS[name];
-  const t=calcTotals(name);
-  let html=`<div class="store-meta"><span class="store-meta-title">${name}店</span><input class="meta-input" type="text" placeholder="実施者名" value="${sc.checker||''}" style="width:110px" oninput="setMeta('${name}','checker',this.value)"><input class="meta-input" type="date" value="${sc.date||''}" style="width:140px" oninput="setMeta('${name}','date',this.value)"></div>`;
+  const t=calcTotalsFromSc(name,sc);
+  let html=`<div class="month-select-wrap"><span class="month-select-label">📅 入力する月：</span><select class="month-select" onchange="changeStoreMonth('${name}',this.value)">${buildMonthOptions(sm.y,sm.m)}</select><span class="month-loading" id="monthLoading_${name}"></span></div>`;
+  html+=`<div class="store-meta"><span class="store-meta-title">${name}店</span><input class="meta-input" type="text" placeholder="実施者名" value="${sc.checker||''}" style="width:110px" oninput="setStoreMeta('${name}','checker',this.value)"><input class="meta-input" type="date" value="${sc.date||''}" style="width:140px" oninput="setStoreMeta('${name}','date',this.value)"></div>`;
   html+=`<div class="legend"><span class="leg-item"><span class="leg-dot" style="background:#C0E8D8;color:#0A5A3A">4</span>どの時間も完璧</span><span class="leg-item"><span class="leg-dot" style="background:#D4EDCC;color:#2A5A18">3</span>概ねできている</span><span class="leg-item"><span class="leg-dot" style="background:#FDF4C0;color:#6A5500">2</span>ある程度</span><span class="leg-item"><span class="leg-dot" style="background:#FDE8C2;color:#7A4A00">1</span>できていないことが多い</span><span class="leg-item"><span class="leg-dot" style="background:#FDDCDC;color:#7A1A1A">0</span>まったくできていない</span></div>`;
   html+=`<div class="score-cards"><div class="score-card"><div class="sc-label">Q クオリティ</div><div class="sc-value">${t.q}/${t.mq}</div><div class="pb-wrap"><div class="pb" style="background:#1A3F6F;width:${pct(t.q,t.mq)}%"></div></div></div><div class="score-card"><div class="sc-label">S サービス</div><div class="sc-value">${t.s}/${t.ms}</div><div class="pb-wrap"><div class="pb" style="background:#2C5F2E;width:${pct(t.s,t.ms)}%"></div></div></div><div class="score-card"><div class="sc-label">C クレンリネス</div><div class="sc-value">${t.c}/${t.mc}</div><div class="pb-wrap"><div class="pb" style="background:#92520A;width:${pct(t.c,t.mc)}%"></div></div></div><div class="score-card"><div class="sc-label">管理</div><div class="sc-value">${t.m}/${t.mm}</div><div class="pb-wrap"><div class="pb" style="background:#6B3070;width:${pct(t.m,t.mm)}%"></div></div></div><div class="score-card sc-total"><div class="sc-label">合計</div><div class="sc-value">${t.total}点</div><div class="pb-wrap"><div class="pb" style="background:#1A3F6F;width:${pct(t.total,t.max)}%"></div></div></div></div>`;
 
@@ -692,13 +751,13 @@ function renderCheck(name){
       const photoListHtml = existPhotos.map((p,pi)=>
         `<div class="photo-item"><img class="photo-img" src="${p}" data-pi="${pi}" onclick="showPhoto(this.src)"><button class="photo-x" data-name="${name}" data-key="${sec.k}" data-idx="${idx}" data-pi="${pi}" onclick="removePhotoBtn(this)">×</button></div>`
       ).join('');
-      html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea><div class="photo-wrap"><label class="photo-btn">📷 写真を添付<input type="file" accept="image/*" style="display:none" onchange="addPhoto(this,'${name}','${sec.k}',${idx})"></label><div class="photo-list" id="pl_${name}_${sec.k}_${idx}">${photoListHtml}</div></div></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
+      html+=`<div class="item-row"><div class="item-top"><span class="item-num">${idx+1}</span><div class="item-body"><div class="item-text">${item.t}</div><textarea class="item-comment" placeholder="コメントを入力..." oninput="setStoreComment('${name}','${sec.k}',${idx},this.value)">${cm}</textarea><div class="photo-wrap"><label class="photo-btn">📷 写真を添付<input type="file" accept="image/*" style="display:none" onchange="addStorePhoto(this,'${name}','${sec.k}',${idx})"></label><div class="photo-list" id="pl_${name}_${sec.k}_${idx}">${photoListHtml}</div></div></div><div class="score-btns">${allowedVals.map(v=>`<button class="sb${s.score===v?' v'+v:''}" onclick="setStoreScore('${name}','${sec.k}',${idx},${v})">${v}</button>`).join('')}</div></div></div>`;
     });
     html+=`<div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_${sec.k}'))">▲ 閉じる</button></div>`;
     html+='</div></div>';
   });
 
-  html+=`<div style="margin-top:8px"><div class="section" id="sec_${name}_overall"><div class="sec-header" style="background:var(--surface2)"><span class="sec-header-title">📝 全体コメント・本部メモ</span><button class="sec-toggle-btn" onclick="toggleSec(document.getElementById('sec_${name}_overall'))">▲ 閉じる</button></div><div class="items-wrap open"><div class="sec-comment-wrap"><label>店舗コメント／改善ポイント</label><textarea oninput="setMeta('${name}','storeComment',this.value)">${sc.storeComment||''}</textarea></div><div class="sec-comment-wrap"><label>本部コメント</label><textarea oninput="setMeta('${name}','hqComment',this.value)">${sc.hqComment||''}</textarea></div><div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_overall'))">▲ 閉じる</button></div></div></div></div>`;
+  html+=`<div style="margin-top:8px"><div class="section" id="sec_${name}_overall"><div class="sec-header" style="background:var(--surface2)"><span class="sec-header-title">📝 全体コメント・本部メモ</span><button class="sec-toggle-btn" onclick="toggleSec(document.getElementById('sec_${name}_overall'))">▲ 閉じる</button></div><div class="items-wrap open"><div class="sec-comment-wrap"><label>店舗コメント／改善ポイント</label><textarea oninput="setStoreMeta('${name}','storeComment',this.value)">${sc.storeComment||''}</textarea></div><div class="sec-comment-wrap"><label>本部コメント</label><textarea oninput="setStoreMeta('${name}','hqComment',this.value)">${sc.hqComment||''}</textarea></div><div class="sec-close-bar"><button class="sec-close-btn" onclick="toggleSec(document.getElementById('sec_${name}_overall'))">▲ 閉じる</button></div></div></div></div>`;
   document.getElementById('viewCheck').innerHTML=html;
 }
 
@@ -710,6 +769,150 @@ function toggleSec(secEl){
   const isOpen = wrap.classList.contains('open');
   wrap.classList.toggle('open');
   if(btn) btn.textContent = isOpen ? '▼ 開く' : '▲ 閉じる';
+}
+
+// ──────────────────── 店舗別月データ操作 ────────────────────
+function getStoreSc(name){
+  const sm = storeMonths[name] || getReiwaMonth();
+  const key = monthKey(sm.y, sm.m);
+  if(!appData.stores) appData.stores={};
+  if(!appData.stores[key]) appData.stores[key]={};
+  if(!appData.stores[key][name]) appData.stores[key][name]=emptyStore(name);
+  return appData.stores[key][name];
+}
+
+function calcTotalsFromSc(name, sc){
+  const d=DEFS[name];
+  sc=sc||emptyStore(name);
+  const q=(sc.q||[]).reduce((a,i)=>a+(i.score||0),0);
+  const s=(sc.s||[]).reduce((a,i)=>a+(i.score||0),0);
+  const c=(sc.c||[]).reduce((a,i)=>a+(i.score||0),0);
+  const m=(sc.m||[]).reduce((a,i)=>a+(i.score||0),0);
+  return {q,s,c,m,mq:d.mq,ms:d.ms,mc:d.mc,mm:d.mm,total:q+s+c+m,max:d.mq+d.ms+d.mc+d.mm};
+}
+
+async function changeStoreMonth(name, val){
+  const [y,m] = val.split('_').map(Number);
+  storeMonths[name] = {y,m};
+  const loadEl = document.getElementById('monthLoading_'+name);
+  if(loadEl) loadEl.textContent = '読み込み中...';
+  await renderCheck(name);
+}
+
+function setStoreMeta(name,field,val){
+  const sc=getStoreSc(name);
+  sc[field]=val;
+  scheduleStorePush(name);
+}
+
+let storeTimers={};
+function scheduleStorePush(name){
+  clearTimeout(storeTimers[name]);
+  storeTimers[name]=setTimeout(()=>saveStoreData(name),800);
+}
+
+function setStoreScore(name,key,idx,val){
+  const sc=getStoreSc(name);
+  if(!sc[key][idx]) sc[key][idx]={score:0,comment:''};
+  sc[key][idx].score=val;
+  scheduleStorePush(name);
+  // UIを更新（スコアボタンの色）
+  document.querySelectorAll('.sb').forEach(btn=>{
+    const oc=btn.getAttribute('onclick')||'';
+    const mm=oc.match(/setStoreScore\('(.+?)','(.+?)',(\d+),(\d+)\)/);
+    if(mm&&mm[1]===name&&mm[2]===key&&parseInt(mm[3])===idx){
+      btn.className='sb'+(val===parseInt(mm[4])?' v'+mm[4]:'');
+    }
+  });
+  // スコアカードを更新
+  const t=calcTotalsFromSc(name,sc);
+  const cards=document.querySelectorAll('.score-card .sc-value');
+  if(cards[0])cards[0].textContent=t.q+'/'+t.mq;
+  if(cards[1])cards[1].textContent=t.s+'/'+t.ms;
+  if(cards[2])cards[2].textContent=t.c+'/'+t.mc;
+  if(cards[3])cards[3].textContent=t.m+'/'+t.mm;
+  if(cards[4])cards[4].textContent=t.total+'点';
+  const pbs=document.querySelectorAll('.score-card .pb');
+  if(pbs[0])pbs[0].style.width=pct(t.q,t.mq)+'%';
+  if(pbs[1])pbs[1].style.width=pct(t.s,t.ms)+'%';
+  if(pbs[2])pbs[2].style.width=pct(t.c,t.mc)+'%';
+  if(pbs[3])pbs[3].style.width=pct(t.m,t.mm)+'%';
+  if(pbs[4])pbs[4].style.width=pct(t.total,t.max)+'%';
+  // セクションバッジを更新
+  const secKeys=['q','s','c','m'];
+  const secMx=[t.mq,t.ms,t.mc,t.mm];
+  const secVals=[t.q,t.s,t.c,t.m];
+  secKeys.forEach((sk,i)=>{
+    const badge=document.getElementById('badge_'+name+'_'+sk);
+    if(badge) badge.textContent=secVals[i]+' / '+secMx[i];
+  });
+}
+
+function setStoreComment(name,key,idx,val){
+  const sc=getStoreSc(name);
+  if(!sc[key][idx]) sc[key][idx]={score:0,comment:''};
+  sc[key][idx].comment=val;
+  scheduleStorePush(name);
+}
+
+function addStorePhoto(inputEl,name,key,idx){
+  const file=inputEl.files[0];
+  if(!file) return;
+  inputEl.value='';
+  idx=parseInt(idx);
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      const MAX=640;
+      let w=img.width,h=img.height;
+      if(w>MAX||h>MAX){ if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;} }
+      const cv=document.createElement('canvas');
+      cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      const b64=cv.toDataURL('image/jpeg',0.7);
+      const sc=getStoreSc(name);
+      const item=sc[key][idx];
+      if(!item.photos) item.photos=[];
+      item.photos.push(b64);
+      scheduleStorePush(name);
+      const pl=document.getElementById('pl_'+name+'_'+key+'_'+idx);
+      if(pl){
+        const pi=item.photos.length-1;
+        const div=document.createElement('div');
+        div.className='photo-item';
+        const imgEl=document.createElement('img');
+        imgEl.className='photo-img';imgEl.src=b64;imgEl.onclick=function(){showPhoto(this.src);};
+        const btnEl=document.createElement('button');
+        btnEl.className='photo-x';btnEl.textContent='×';
+        btnEl.dataset.name=name;btnEl.dataset.key=key;btnEl.dataset.idx=idx;btnEl.dataset.pi=pi;
+        btnEl.onclick=function(){removeStorePhotoBtn(this);};
+        div.appendChild(imgEl);div.appendChild(btnEl);pl.appendChild(div);
+      }
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeStorePhotoBtn(btn){
+  if(!confirm('この写真を削除しますか？')) return;
+  const name=btn.dataset.name,key=btn.dataset.key;
+  const idx=parseInt(btn.dataset.idx),pi=parseInt(btn.dataset.pi);
+  const sc=getStoreSc(name);
+  if(sc[key][idx]&&sc[key][idx].photos){ sc[key][idx].photos.splice(pi,1); scheduleStorePush(name); }
+  const pl=document.getElementById('pl_'+name+'_'+key+'_'+idx);
+  if(pl&&sc[key][idx]&&sc[key][idx].photos){
+    pl.innerHTML='';
+    sc[key][idx].photos.forEach(function(p,i){
+      const div=document.createElement('div');div.className='photo-item';
+      const imgEl=document.createElement('img');imgEl.className='photo-img';imgEl.src=p;imgEl.onclick=function(){showPhoto(this.src);};
+      const btnEl=document.createElement('button');btnEl.className='photo-x';btnEl.textContent='×';
+      btnEl.dataset.name=name;btnEl.dataset.key=key;btnEl.dataset.idx=idx;btnEl.dataset.pi=i;
+      btnEl.onclick=function(){removeStorePhotoBtn(this);};
+      div.appendChild(imgEl);div.appendChild(btnEl);pl.appendChild(div);
+    });
+  }
 }
 
 function setScore(name,key,idx,val){
@@ -939,6 +1142,9 @@ window.doNextMonth=doNextMonth; window.saveCurrentMonth=saveCurrentMonth;
 window.setScore=setScore; window.setComment=setComment; window.setMeta=setMeta;
 window.toggleSec=toggleSec; window.toggleHist=toggleHist;
 window.addPhoto=addPhoto; window.removePhotoBtn=removePhotoBtn; window.showPhoto=showPhoto;
+window.addStorePhoto=addStorePhoto; window.removeStorePhotoBtn=removeStorePhotoBtn;
+window.setStoreScore=setStoreScore; window.setStoreComment=setStoreComment; window.setStoreMeta=setStoreMeta;
+window.changeStoreMonth=changeStoreMonth;
 window.printCurrentView=printCurrentView;
 window.getReiwaMonth=getReiwaMonth; window.startMonthWatcher=startMonthWatcher;
 
